@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<attr name="errorViewLayout" format="reference"/>
+	<attr name="emptyViewLayout" format="reference"/>
+	<attr name="appkitEmptyButtonStyle" format="reference"/>
+	<attr name="appkitErrorButtonStyle" format="reference"/>
+	<attr name="appkitDefaultErrorText" format="string|reference"/>
+	<attr name="appkitRetryButtonText" format="string|reference"/>
+	<attr name="appkitBackDrawable" format="reference"/>
+</resources>

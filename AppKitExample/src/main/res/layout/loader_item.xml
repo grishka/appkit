@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="200dip"
+	android:orientation="vertical"
+	android:background="@drawable/card_bg"
+	android:outlineProvider="background"
+	android:elevation="1dip">
+
+	<ImageView
+		android:id="@+id/image"
+		android:layout_width="match_parent"
+		android:layout_height="0dip"
+		android:layout_weight="1"
+		android:scaleType="centerCrop"
+		tools:src="#0F0"/>
+
+	<TextView
+		android:id="@+id/text"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:lines="2"
+		android:textSize="13dip"
+		android:textColor="#000"
+		android:padding="8dip"
+		android:ellipsize="end"
+		tools:text="Photo description"/>
+
+</LinearLayout>

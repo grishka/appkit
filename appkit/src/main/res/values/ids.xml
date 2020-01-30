@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<item name="tag_image_load_task" type="id"/>
+	<item name="tag_visibility_anim" type="id"/>
+	<item name="content" type="id"/>
+	<item name="loading" type="id"/>
+	<item name="error" type="id"/>
+	<item name="fragment_wrap" type="id"/>
+</resources>
