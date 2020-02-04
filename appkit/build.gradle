@@ -1,4 +1,6 @@
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-android'
 
 android {
 	compileSdkVersion 29
@@ -29,4 +31,9 @@ dependencies {
 	implementation 'com.github.grishka.litex:viewpager:1.0'
 	implementation 'com.github.grishka.litex:collection:1.0'
 	implementation 'com.jakewharton:disklrucache:2.0.2'
+    compile "androidx.core:core-ktx:+"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}
+repositories {
+    mavenCentral()
 }

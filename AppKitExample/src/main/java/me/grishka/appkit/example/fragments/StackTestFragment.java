@@ -36,7 +36,7 @@ public class StackTestFragment extends ToolbarFragment{
 			public void onClick(View view){
 				Bundle args=new Bundle();
 				args.putInt("index", index+1);
-				Nav.go(getActivity(), StackTestFragment.class, args);
+				Nav.INSTANCE.go(getActivity(), StackTestFragment.class, args);
 			}
 		});
 
