@@ -1,4 +1,4 @@
 include ':AppKitExample'
-rootProject.name='AppKitExample'
+//rootProject.name='AppKitExample'
 
 include ':appkit'
