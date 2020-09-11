@@ -9,5 +9,7 @@
 	android:theme="?android:attr/actionBarTheme"
 	android:popupTheme="?android:attr/actionBarPopupTheme"
 	android:background="?android:attr/colorPrimary"
+	android:titleTextAppearance="?android:attr/titleTextAppearance"
+	android:subtitleTextAppearance="?android:attr/titleTextAppearance"
 	android:elevation="3dip"
 	tools:showIn="@layout/loader_fragment"/>
