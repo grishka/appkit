@@ -120,9 +120,9 @@ public class FragmentStackActivity extends Activity{
 					for(int i=0; i<fragmentContainers.size()-1; i++){
 						View container=fragmentContainers.get(i);
 						if(container.getVisibility()==View.VISIBLE){
-							container.setVisibility(View.GONE);
 							getFragmentManager().beginTransaction().hide(getFragmentManager().findFragmentById(container.getId())).commit();
 							getFragmentManager().executePendingTransactions();
+							container.setVisibility(View.GONE);
 						}
 					}
 					if(fragment instanceof AppKitFragment)
@@ -169,10 +169,10 @@ public class FragmentStackActivity extends Activity{
 			final FrameLayout wrap=fragmentContainers.remove(fragmentContainers.size()-1);
 			final Fragment fragment=getFragmentManager().findFragmentById(wrap.getId());
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
-			prevWrap.setVisibility(View.VISIBLE);
 			Fragment prevFragment=getFragmentManager().findFragmentById(prevWrap.getId());
 			getFragmentManager().beginTransaction().show(prevFragment).commit();
 			getFragmentManager().executePendingTransactions();
+			prevWrap.setVisibility(View.VISIBLE);
 			final boolean lightStatus, lightNav;
 			if(prevFragment instanceof WindowInsetsAwareFragment){
 				((WindowInsetsAwareFragment) prevFragment).onApplyWindowInsets(new WindowInsets(lastInsets));
