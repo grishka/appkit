@@ -111,6 +111,8 @@ public class FragmentStackActivity extends Activity{
 		}else{
 			lightStatus=lightNav=false;
 		}
+		if(fragment instanceof AppKitFragment)
+			((AppKitFragment) fragment).onShown();
 		if(fragmentContainers.size()>1){
 			wrap.setAlpha(0);
 			wrap.setTranslationX(V.dp(100));
@@ -120,8 +122,8 @@ public class FragmentStackActivity extends Activity{
 					for(int i=0; i<fragmentContainers.size()-1; i++){
 						View container=fragmentContainers.get(i);
 						if(container.getVisibility()==View.VISIBLE){
-							getFragmentManager().beginTransaction().hide(getFragmentManager().findFragmentById(container.getId())).commit();
-							getFragmentManager().executePendingTransactions();
+							Fragment f=getFragmentManager().findFragmentById(container.getId());
+							if(f instanceof AppKitFragment) ((AppKitFragment) f).onHidden();
 							container.setVisibility(View.GONE);
 						}
 					}
@@ -154,7 +156,10 @@ public class FragmentStackActivity extends Activity{
 	public void showFragmentClearingBackStack(Fragment fragment){
 		FragmentTransaction transaction=getFragmentManager().beginTransaction();
 		for(FrameLayout fl:fragmentContainers){
-			transaction.remove(getFragmentManager().findFragmentById(fl.getId()));
+			Fragment f=getFragmentManager().findFragmentById(fl.getId());
+			transaction.remove(f);
+			if(f instanceof AppKitFragment)
+				((AppKitFragment) f).onHidden();
 		}
 		transaction.commit();
 		getFragmentManager().executePendingTransactions();
@@ -170,8 +175,10 @@ public class FragmentStackActivity extends Activity{
 			final Fragment fragment=getFragmentManager().findFragmentById(wrap.getId());
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
 			Fragment prevFragment=getFragmentManager().findFragmentById(prevWrap.getId());
-			getFragmentManager().beginTransaction().show(prevFragment).commit();
-			getFragmentManager().executePendingTransactions();
+			if(prevFragment instanceof AppKitFragment)
+				((AppKitFragment) prevFragment).onShown();
+			if(fragment instanceof AppKitFragment)
+				((AppKitFragment) fragment).onHidden();
 			prevWrap.setVisibility(View.VISIBLE);
 			final boolean lightStatus, lightNav;
 			if(prevFragment instanceof WindowInsetsAwareFragment){
