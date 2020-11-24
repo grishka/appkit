@@ -50,6 +50,8 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	private View rootView;
 	private TextView toolbarTitleView, toolbarSubtitleView;
 	private boolean ignoreSpinnerSelection;
+	private boolean resumed;
+	private boolean hidden;
 
 	/**
 	 * If your fragment is used as a child in TabbedFragment, this will be in the arguments.
@@ -470,6 +472,42 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	protected void setNavigationBarColor(int color){
 		if(rootView instanceof FragmentRootLinearLayout)
 			((FragmentRootLinearLayout) rootView).setNavigationBarColor(color);
+	}
+
+	@Override
+	public void onHiddenChanged(boolean hidden){
+		super.onHiddenChanged(hidden);
+		if(hidden!=this.hidden && resumed){
+			this.hidden=hidden;
+			if(hidden)
+				onHidden();
+			else
+				onShown();
+		}
+	}
+
+	@Override
+	public void onResume(){
+		super.onResume();
+		resumed=true;
+		if(!hidden)
+			onShown();
+	}
+
+	@Override
+	public void onPause(){
+		super.onPause();
+		resumed=false;
+		if(!hidden)
+			onHidden();
+	}
+
+	protected void onShown(){
+
+	}
+
+	protected void onHidden(){
+
 	}
 
 	protected class NavigationSpinnerAdapter extends ArrayAdapter {

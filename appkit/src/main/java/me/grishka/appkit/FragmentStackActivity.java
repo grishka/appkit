@@ -118,7 +118,12 @@ public class FragmentStackActivity extends Activity{
 				@Override
 				public void run(){
 					for(int i=0; i<fragmentContainers.size()-1; i++){
-						fragmentContainers.get(i).setVisibility(View.GONE);
+						View container=fragmentContainers.get(i);
+						if(container.getVisibility()==View.VISIBLE){
+							container.setVisibility(View.GONE);
+							getFragmentManager().beginTransaction().hide(getFragmentManager().findFragmentById(container.getId())).commit();
+							getFragmentManager().executePendingTransactions();
+						}
 					}
 					if(fragment instanceof AppKitFragment)
 						((AppKitFragment) fragment).onTransitionFinished();
@@ -166,6 +171,8 @@ public class FragmentStackActivity extends Activity{
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
 			prevWrap.setVisibility(View.VISIBLE);
 			Fragment prevFragment=getFragmentManager().findFragmentById(prevWrap.getId());
+			getFragmentManager().beginTransaction().show(prevFragment).commit();
+			getFragmentManager().executePendingTransactions();
 			final boolean lightStatus, lightNav;
 			if(prevFragment instanceof WindowInsetsAwareFragment){
 				((WindowInsetsAwareFragment) prevFragment).onApplyWindowInsets(new WindowInsets(lastInsets));
