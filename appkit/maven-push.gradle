@@ -1,0 +1,94 @@
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
+
+def isReleaseBuild() {
+    return VERSION_NAME.contains("SNAPSHOT") == false
+}
+
+def getReleaseRepositoryUrl() {
+    return hasProperty('RELEASE_REPOSITORY_URL') ? RELEASE_REPOSITORY_URL
+            : "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+}
+
+def getSnapshotRepositoryUrl() {
+    return hasProperty('SNAPSHOT_REPOSITORY_URL') ? SNAPSHOT_REPOSITORY_URL
+            : "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+}
+
+def getRepositoryUsername() {
+    return hasProperty('ossrhUsername') ? ossrhUsername : ""
+}
+
+def getRepositoryPassword() {
+    return hasProperty('ossrhPassword') ? ossrhPassword : ""
+}
+
+def getSigningKeyID(){
+    return hasProperty("mavenGpgKeyId") ? mavenGpgKeyId : ""
+}
+
+def getSigningKey(){
+    return hasProperty("mavenGpgKey") ? mavenGpgKey: ""
+}
+
+afterEvaluate { project ->
+
+    task androidSourcesJar(type: Jar) {
+        classifier = 'sources'
+        from android.sourceSets.main.java.sourceFiles
+    }
+
+    task javadocJar(type: Jar) {
+        classifier = 'javadoc'
+        from "/dev/null"
+    }
+
+    publishing {
+        repositories {
+            maven {
+                url = getReleaseRepositoryUrl()
+                credentials {
+                    username = getRepositoryUsername()
+                    password = getRepositoryPassword()
+                }
+            }
+        }
+        publications {
+            release (MavenPublication) {
+                from components.release
+                artifact tasks.androidSourcesJar
+                artifact tasks.javadocJar
+                groupId = 'me.grishka.appkit'
+                artifactId = project.name
+                version = project.version
+                pom {
+                    name = "AppKit"
+                    description = "Android app boilerplate and image loader"
+                    url = "https://github.com/grishka/appkit"
+                    licenses {
+                        license {
+                            name = 'The Unlicense'
+                            url = 'https://unlicense.org'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = 'grishka'
+                            name = 'Gregory Klyushnikov'
+                            email = 'mavencentral@grishka.me'
+                        }
+                    }
+                    scm {
+                        url = 'https://github.com/grishka/appkit'
+                        connection = 'scm:git:git://github.com/grishka/appkit.git'
+                        developerConnection = 'scm:git:ssh://github.com:grishka/appkit.git'
+                    }
+                }
+            }
+        }
+    }
+
+    signing {
+        sign publishing.publications.release
+    }
+}

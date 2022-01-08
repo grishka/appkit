@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply from: 'maven-push.gradle'
 
 android {
 	compileSdkVersion 31
@@ -22,3 +23,5 @@ dependencies {
 	implementation 'me.grishka.litex:collection:1.1.0'
 	implementation 'com.jakewharton:disklrucache:2.0.2'
 }
+
+version = '1.0'
