@@ -151,7 +151,7 @@ public class ExampleLoaderFragment extends BaseRecyclerFragment<Photo>{
 
 		@Override
 		public void onClick(){
-			Toast.makeText(getActivity(), "You clicked item "+getAdapterPosition(), Toast.LENGTH_SHORT).show();
+			Toast.makeText(getActivity(), "You clicked item "+getAbsoluteAdapterPosition(), Toast.LENGTH_SHORT).show();
 		}
 	}
 }

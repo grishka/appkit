@@ -8,6 +8,8 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.SoundEffectConstants;
@@ -36,14 +38,11 @@ import me.grishka.appkit.utils.AutoAssignMaxRecycledViewPool;
  */
 public class UsableRecyclerView extends RecyclerView implements ObservableListImageLoaderAdapter, EmptyViewCapable{
 
-	private int touchSlop, clickStartTimeout, longClickTimeout;
-	private float touchDownX, touchDownY;
 	private float lastTouchX, lastTouchY;
 	private ViewHolder clickingViewHolder;
 	private View highlightedView;
 	private Rect highlightBounds=new Rect();
 	private Drawable highlight;
-	private Runnable postedClickStart, postedLongClick;
 	private AdapterDataObserver emptyViewObserver=new AdapterDataObserver() {
 		@Override
 		public void onChanged() {
@@ -90,6 +89,9 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private boolean drawHighlightOnTop=false;
 	private SelectorBoundsProvider highlightBoundsProvider;
 	private ArrayList<ListImageLoaderWrapper.DataSetObserver> imgLoaderObservers=new ArrayList<>();
+	private GestureDetector gestureDetector;
+	private boolean trackingTouch;
+	private boolean didHighlight, didClick;
 
 	public UsableRecyclerView(Context context) {
 		super(context);
@@ -107,97 +109,34 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	private void init(){
-		touchSlop= ViewConfiguration.get(getContext()).getScaledTouchSlop();
-		clickStartTimeout=ViewConfiguration.getTapTimeout();
-		longClickTimeout=ViewConfiguration.getLongPressTimeout();
 		TypedArray ta=getContext().obtainStyledAttributes(new int[]{android.R.attr.selectableItemBackground});
 		setSelector(ta.getDrawable(0));
 		ta.recycle();
 
 		setRecycledViewPool(new AutoAssignMaxRecycledViewPool(25));
+
+		gestureDetector=new GestureDetector(getContext(), new ItemTapGestureListener());
 	}
 
 	@Override
 	public boolean onTouchEvent(MotionEvent e) {
-		if(e.getAction()==MotionEvent.ACTION_DOWN && getScrollState()==SCROLL_STATE_IDLE){
-			touchDownX=lastTouchX=e.getX();
-			touchDownY=lastTouchY=e.getY();
-			highlightedView=null;
-			View view=findChildViewUnder(e.getX(), e.getY());
-			if(view!=null){
-				ViewHolder holder=getChildViewHolder(view);
-				if(holder!=null){
-					if(holder instanceof Clickable){
-						if((holder instanceof DisableableClickable && ((DisableableClickable)holder).isEnabled()) ||!(holder instanceof DisableableClickable)) {
-							clickingViewHolder = holder;
-							highlightedView=view;
-							if(postedClickStart!=null)
-								removeCallbacks(postedClickStart);
-							postDelayed(postedClickStart=new ClickStartRunnable(), clickStartTimeout);
-						}
-						if(holder instanceof LongClickable){
-							postDelayed(postedLongClick=new LongClickRunnable(), longClickTimeout);
-						}
-					}
-				}
-			}
-		}
-		if(e.getAction()==MotionEvent.ACTION_CANCEL){
-			clickingViewHolder=null;
-			if(highlightedView!=null) {
-				highlightedView.setPressed(false);
-				highlight.setState(EMPTY_STATE_SET);
-				if (postedClickStart != null) {
-					removeCallbacks(postedClickStart);
-					postedClickStart = null;
-				}
-				if (postedLongClick != null) {
-					removeCallbacks(postedLongClick);
-					postedLongClick = null;
-				}
-			}
-		}
-		if(e.getAction()==MotionEvent.ACTION_MOVE && clickingViewHolder!=null){
+		if(trackingTouch || getScrollState()==SCROLL_STATE_IDLE){
 			lastTouchX=e.getX();
 			lastTouchY=e.getY();
-			if(Math.abs(e.getX()-touchDownX)>touchSlop || Math.abs(e.getY()-touchDownY)>touchSlop){
-				clickingViewHolder=null;
-				highlightedView.setPressed(false);
-				highlight.setState(EMPTY_STATE_SET);
-				if(postedClickStart!=null) {
-					removeCallbacks(postedClickStart);
-					postedClickStart=null;
-				}
-				if(postedLongClick!=null){
-					removeCallbacks(postedLongClick);
-					postedLongClick=null;
-				}
+			if(e.getAction()==MotionEvent.ACTION_DOWN){
+				didClick=didHighlight=false;
 			}
-		}
-		if(e.getAction()==MotionEvent.ACTION_UP){
-			lastTouchX=e.getX();
-			lastTouchY=e.getY();
-			if(postedLongClick!=null){
-				removeCallbacks(postedLongClick);
-				postedLongClick=null;
-			}
-			if(clickingViewHolder!=null && (Math.abs(e.getX()-touchDownX)<touchSlop || Math.abs(e.getY()-touchDownY)<touchSlop)){
-				((Clickable)clickingViewHolder).onClick();
-				playSoundEffect(SoundEffectConstants.CLICK);
-				if(postedClickStart!=null) {
-					removeCallbacks(postedClickStart);
-					postedClickStart.run();
-					postedClickStart=null;
+			gestureDetector.onTouchEvent(e);
+			if(e.getAction()==MotionEvent.ACTION_DOWN){
+				trackingTouch=true;
+			}else if(e.getAction()==MotionEvent.ACTION_UP || e.getAction()==MotionEvent.ACTION_CANCEL || getScrollState()!=SCROLL_STATE_IDLE){
+				trackingTouch=false;
+				if(didClick && !didHighlight){
+					showHighlight();
+					postDelayed(this::endClick, 32);
+				}else{
+					endClick();
 				}
-				clickingViewHolder = null;
-				postDelayed(new Runnable() { // allow the pressed state to be drawn for at least 1 frame
-					@Override
-					public void run() {
-						if(highlightedView!=null)
-							highlightedView.setPressed(false);
-						highlight.setState(EMPTY_STATE_SET);
-					}
-				}, 50);
 			}
 		}
 
@@ -212,9 +151,6 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		if(highlight!=null){
 			highlight.setCallback(null);
 		}
-		/*if(!selector.isStateful()){
-			highlight=
-		}*/
 		highlight=selector;
 		if(highlight==null)
 			return;
@@ -239,7 +175,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		if(drawHighlightOnTop)
 			super.dispatchDraw(canvas);
 		if(highlight!=null) {
-			if (highlightedView != null) {
+			if (highlightedView!=null) {
 				if(highlightBoundsProvider!=null){
 					highlightBoundsProvider.getSelectorBounds(highlightedView, highlightBounds);
 				}else{
@@ -249,9 +185,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 				}
 			}
 			highlight.setBounds(highlightBounds);
-			if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.LOLLIPOP){
-				highlight.setHotspot(lastTouchX, lastTouchY);
-			}
+			highlight.setHotspot(lastTouchX, lastTouchY);
 			highlight.draw(canvas);
 		}
 		if(!drawHighlightOnTop)
@@ -323,7 +257,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	@Override
 	public int getImageCountForItem(int item) {
 		RecyclerView.Adapter adapter=getAdapter();
-		if(adapter!=null && adapter instanceof ImageLoaderRecyclerAdapter){
+		if(adapter instanceof ImageLoaderRecyclerAdapter){
 			return ((ImageLoaderRecyclerAdapter)adapter).getImageCountForItem(item);
 		}
 		return 0;
@@ -332,7 +266,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	@Override
 	public String getImageURL(int item, int image) {
 		RecyclerView.Adapter adapter=getAdapter();
-		if(adapter!=null && adapter instanceof ImageLoaderRecyclerAdapter){
+		if(adapter instanceof ImageLoaderRecyclerAdapter){
 			return ((ImageLoaderRecyclerAdapter)adapter).getImageURL(item, image);
 		}
 		return null;
@@ -341,7 +275,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	@Override
 	public void imageLoaded(int item, int image, Bitmap bitmap) {
 		ViewHolder holder=findViewHolderForAdapterPosition(item);
-		if(holder!=null && holder instanceof ImageLoaderViewHolder){
+		if(holder instanceof ImageLoaderViewHolder){
 			((ImageLoaderViewHolder)holder).setImage(image, bitmap);
 		}
 	}
@@ -356,7 +290,24 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		imgLoaderObservers.remove(observer);
 	}
 
-	public static abstract class Adapter<VH extends ViewHolder> extends RecyclerView.Adapter<VH> implements ImageLoaderRecyclerAdapter{
+	private void endClick(){
+		if(clickingViewHolder!=null){
+			clickingViewHolder.itemView.setPressed(false);
+			highlight.setState(ENABLED_STATE_SET);
+			clickingViewHolder=null;
+		}
+	}
+
+	private void showHighlight(){
+		if(clickingViewHolder!=null){
+			didHighlight=true;
+			highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
+			clickingViewHolder.itemView.setPressed(true);
+			invalidate();
+		}
+	}
+
+	public static abstract class Adapter<VH extends ViewHolder> extends RecyclerView.Adapter<VH>{
 
 		private ListImageLoaderWrapper imgLoader;
 
@@ -367,18 +318,8 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		@Override
 		public void onBindViewHolder(VH holder, int position) {
 			if(holder instanceof ImageLoaderViewHolder){
-				imgLoader.bindViewHolder(this, (ImageLoaderViewHolder)holder, position);
+				imgLoader.bindViewHolder((ImageLoaderRecyclerAdapter) this, (ImageLoaderViewHolder)holder, position);
 			}
-		}
-
-		@Override
-		public int getImageCountForItem(int position) {
-			return 0;
-		}
-
-		@Override
-		public String getImageURL(int position, int image) {
-			return null;
 		}
 	}
 
@@ -412,32 +353,6 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		 * @return true if you've handled the long click so a haptic feedback will be performed and the highlight will disappear.
 		 */
 		public boolean onLongClick();
-	}
-
-	private class ClickStartRunnable implements Runnable{
-		@Override
-		public void run() {
-			if(clickingViewHolder==null) return; // click has been canceled
-			postedClickStart=null;
-			highlightedView.setPressed(true);
-			highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
-			invalidate();
-		}
-	}
-
-	private class LongClickRunnable implements Runnable{
-		@Override
-		public void run() {
-			if(clickingViewHolder==null) return; // click has been canceled
-			postedLongClick=null;
-			highlightedView.setPressed(false);
-			highlight.setState(EMPTY_STATE_SET);
-			boolean result=((LongClickable)clickingViewHolder).onLongClick();
-			if(result){
-				performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-			}
-			clickingViewHolder=null;
-		}
 	}
 
 	private class FooterRecyclerAdapter extends RecyclerView.Adapter<ViewHolder> {
@@ -544,5 +459,60 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 
 	public interface SelectorBoundsProvider{
 		public void getSelectorBounds(View view, Rect outRect);
+	}
+
+	private class ItemTapGestureListener implements GestureDetector.OnGestureListener{
+
+		@Override
+		public boolean onDown(MotionEvent e){
+			View view=findChildViewUnder(e.getX(), e.getY());
+			if(view!=null){
+				ViewHolder holder=getChildViewHolder(view);
+				if(holder instanceof Clickable){
+					boolean enabled=true;
+					if(holder instanceof DisableableClickable)
+						enabled=((DisableableClickable) holder).isEnabled();
+					if(enabled){
+						clickingViewHolder=holder;
+						highlightedView=holder.itemView;
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public boolean onSingleTapUp(MotionEvent e){
+			if(clickingViewHolder!=null){
+				didClick=true;
+				playSoundEffect(SoundEffectConstants.CLICK);
+				((Clickable)clickingViewHolder).onClick();
+			}
+			return true;
+		}
+
+		@Override
+		public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY){
+			return false;
+		}
+
+		@Override
+		public void onShowPress(MotionEvent e){
+			showHighlight();
+		}
+
+		@Override
+		public void onLongPress(MotionEvent e){
+			if(clickingViewHolder instanceof LongClickable && ((LongClickable) clickingViewHolder).onLongClick()){
+				performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+				endClick();
+			}
+		}
+
+		@Override
+		public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY){
+			return false;
+		}
 	}
 }

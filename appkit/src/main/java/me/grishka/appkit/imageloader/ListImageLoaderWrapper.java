@@ -277,7 +277,9 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		}
 
 		if(firstVisibleItem+visibleItemCount>=totalItemCount-1 && visibleItemCount!=0 && totalItemCount!=0){
-			if(listener!=null) listener.onScrolledToLastItem();
+			if(listener!=null){
+				list.getView().post(listener::onScrolledToLastItem);
+			}
 		}
 		if(listener!=null && listener instanceof ExtendedListener){
 			((ExtendedListener) listener).onScroll(firstVisibleItem-getNumHeaders(), visibleItemCount, totalItemCount-getNumHeaders()-getNumFooters());
