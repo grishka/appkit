@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,6 +26,7 @@ import me.grishka.appkit.fragments.BaseRecyclerFragment;
 import me.grishka.appkit.imageloader.ImageLoaderRecyclerAdapter;
 import me.grishka.appkit.imageloader.ImageLoaderViewHolder;
 import me.grishka.appkit.imageloader.ListImageLoaderWrapper;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 import me.grishka.appkit.utils.BindableViewHolder;
 import me.grishka.appkit.utils.V;
 import me.grishka.appkit.views.UsableRecyclerView;
@@ -117,8 +119,8 @@ public class ExampleLoaderFragment extends BaseRecyclerFragment<Photo>{
 		}
 
 		@Override
-		public String getImageURL(int position, int image){
-			return data.get(position).thumbnailUrl;
+		public ImageLoaderRequest getImageRequest(int position, int image){
+			return data.get(position).thumbnailRequest;
 		}
 	}
 
@@ -140,8 +142,8 @@ public class ExampleLoaderFragment extends BaseRecyclerFragment<Photo>{
 		}
 
 		@Override
-		public void setImage(int index, Bitmap bitmap){
-			image.setImageBitmap(bitmap);
+		public void setImage(int index, Drawable drawable){
+			image.setImageDrawable(drawable);
 		}
 
 		@Override

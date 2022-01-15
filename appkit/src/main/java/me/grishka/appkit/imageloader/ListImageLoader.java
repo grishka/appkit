@@ -3,15 +3,18 @@ package me.grishka.appkit.imageloader;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Vector;
 
 import androidx.collection.LongSparseArray;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 public class ListImageLoader {
 
@@ -19,11 +22,11 @@ public class ListImageLoader {
 	private static final String TAG="appkit-img-loader";
 
 	private volatile ListImageLoaderAdapter adapter;
-	private Vector<RunnableTask> incomplete=new Vector<RunnableTask>();
+	private final Vector<RunnableTask> incomplete=new Vector<>();
 	private boolean isScrolling;
-	private Handler mainThreadHandler;
-	private Vector<RunnableTask> reusableTasks=new Vector<RunnableTask>();
-	private LongSparseArray<String> loadedUrls=new LongSparseArray<>(10);
+	private final Handler mainThreadHandler;
+	private final LinkedList<RunnableTask> reusableTasks=new LinkedList<>();
+	private final LongSparseArray<String> loadedRequests=new LongSparseArray<>(10);
 	private LongSparseArray<RunnableTask> pendingPartialCancel;
 
 	public ListImageLoader(){
@@ -49,7 +52,7 @@ public class ListImageLoader {
 			start=Math.max(0, start);
 			end=Math.min(end, adapter.getCount()-1);
 			if(DEBUG) Log.v(TAG, "loadRange: "+start+" - "+end);
-			if(Math.abs(end-start)>30) try{throw new Exception("range: "+start+" - "+end);}catch(Exception x){Log.w("appkit", x);}
+			if(DEBUG && Math.abs(end-start)>30) try{throw new Exception("range: "+start+" - "+end);}catch(Exception x){Log.w("appkit", x);}
 			for(int i=start;i<=end;i++)
 				loadSingleItem(i, context, force);
 		}catch(Exception x){Log.w("appkit", x);}
@@ -60,37 +63,38 @@ public class ListImageLoader {
 			if(DEBUG) Log.v(TAG, "loadItem: "+item);
 			int cnt=adapter.getImageCountForItem(item);
 			for(int i=0;i<cnt;i++){
-				String url=adapter.getImageURL(item, i);
-				if(TextUtils.isEmpty(url))
+				ImageLoaderRequest req=adapter.getImageRequest(item, i);
+				if(req==null)
 					continue;
 				if(pendingPartialCancel!=null){
 					RunnableTask t=pendingPartialCancel.get(makeIndex(item, i));
-					if(t!=null && t.url.equals(url)){
+					if(t!=null && t.req.equals(req)){
 						pendingPartialCancel.remove(makeIndex(item, i));
 						incomplete.add(t);
 						if(DEBUG) Log.v(TAG, "Kept ["+item+"/"+i+"] from previous queue");
 						continue;
 					}
 				}
-				if(url.equals(loadedUrls.get(makeIndex(item, i))) || force){
-					if(ImageCache.getInstance(context).isInTopCache(url)){ // (in)sanity check
+				if(req.getMemoryCacheKey().equals(loadedRequests.get(makeIndex(item, i))) || force){
+					if(ImageCache.getInstance(context).isInTopCache(req)){ // (in)sanity check
 						if(DEBUG) Log.v(TAG, "Image ["+item+"/"+i+"] already loaded; skipping");
-						adapter.imageLoaded(item, i, ImageCache.getInstance(context).getFromTop(url));
+						adapter.imageLoaded(item, i, ImageCache.getInstance(context).getFromTop(req));
 						continue;
 					}else{
-						loadedUrls.remove(makeIndex(item, i));
+						loadedRequests.remove(makeIndex(item, i));
 					}
 				}
 				RunnableTask task=createTask();
 				task.canceled=false;
 				task.item=item;
 				task.image=i;
-				task.url=url;
-				task.set=!isScrolling;
+				task.req=req;
+//				task.set=!isScrolling;
+				task.set=true;
 				task.context=context;
 				if(DEBUG) Log.v(TAG, "Added task: "+task);
 				incomplete.add(task);
-				if(ImageCache.getInstance(task.context).isInCache(task.url)) {
+				if(ImageCache.getInstance(task.context).isInCache(task.req)) {
 					ImageLoaderThreadPool.enqueueCachedTask(task);
 				}else {
 					ImageLoaderThreadPool.enqueueTask(task);
@@ -102,12 +106,22 @@ public class ListImageLoader {
 	}
 
 	private RunnableTask createTask(){
-		if(reusableTasks.size()>0) {
-			if(DEBUG) Log.v(TAG, "Reusing existing task");
-			return reusableTasks.remove(0);
+		synchronized(reusableTasks){
+			if(reusableTasks.size()>0){
+				if(DEBUG) Log.v(TAG, "Reusing existing task");
+				return reusableTasks.remove(0);
+			}
 		}
 		if(DEBUG) Log.w(TAG, "Creating new task");
 		return new RunnableTask();
+	}
+
+	private void reuseTask(RunnableTask task){
+		synchronized(reusableTasks){
+			if(DEBUG && reusableTasks.contains(task))
+				throw new IllegalStateException("task "+task+" already reused");
+			reusableTasks.add(task);
+		}
 	}
 
 	public synchronized boolean isLoading(int item){
@@ -210,16 +224,16 @@ public class ListImageLoader {
 
 	/*package*/ synchronized void onCacheEntryRemoved(String key){
 		int index;
-		while((index=loadedUrls.indexOfValue(key))>=0){
-			long x=loadedUrls.keyAt(index);
-			loadedUrls.removeAt(index);
+		while((index=loadedRequests.indexOfValue(key))>=0){
+			long x=loadedRequests.keyAt(index);
+			loadedRequests.removeAt(index);
 			if(DEBUG) Log.i(TAG, "Removed cache entry for ["+getPosition(x)+"/"+getImage(x)+"] "+key);
 		}
 	}
 	
 	private class RunnableTask implements Runnable{
 		public int item, image;
-		public String url;
+		public ImageLoaderRequest req;
 		public boolean canceled=false;
 		public boolean set=true;
 		private ImageCache.RequestWrapper reqWrapper;
@@ -242,72 +256,38 @@ public class ListImageLoader {
 		
 		public void run(){
 			if(canceled){
-				if(!reusableTasks.contains(RunnableTask.this))
-					reusableTasks.add(RunnableTask.this);
+				reuseTask(this);
 				return;
 			}
 			try{
 				if(DEBUG) Log.v(TAG, "Started: "+this);
 				reqWrapper=new ImageCache.RequestWrapper();
-				Bitmap _bmp=null;
-				/*if(url.startsWith("M")){ // [M]ultichat
-					String[] parts=url.split("\\|");
-					int len=Math.min(parts.length-1, 4);
-					Bitmap[] bmps=new Bitmap[len];
-					for(int i=1;i<len+1;i++){
-						bmps[i-1]=ImageCache.get(parts[i], reqWrapper, null, set);
-					}
-					if(set){
-						_bmp=drawMultichatPhoto(bmps);
-						ImageCache.put(url, _bmp);
-					}
-				}else */if(url.startsWith("A")){ // [A]lternative
-					String[] parts=url.split("\\|");
-					for(int i=1;i<parts.length;i++){
-						_bmp=ImageCache.getInstance(context).get(parts[i], reqWrapper, null, set);
-						if(DEBUG) Log.w(TAG, "Get "+parts[i]+": "+_bmp);
-						if(_bmp!=null || !set) break;
-					}
-				}else if(url.startsWith("B")){ // [B]lur
-					String[] parts=url.split("\\|");
-					int radius=Integer.parseInt(parts[1]);
-					_bmp=ImageCache.getInstance(context).get(parts[2]);
-					Bitmap tmp=Bitmap.createBitmap(_bmp.getWidth(), _bmp.getHeight(), Bitmap.Config.ARGB_8888);
-					new Canvas(tmp).drawBitmap(_bmp, 0, 0, null);
-					_bmp=tmp;
-					StackBlur.blurBitmap(_bmp, radius);
-					ImageCache.getInstance(context).put(url, _bmp);
-				}else{
-					_bmp=ImageCache.getInstance(context).get(url, reqWrapper, null, set);
-					if(set && _bmp==null)
-						Log.w(TAG, "error downloading image: "+url);
-				}
+				Drawable _bmp=ImageCache.getInstance(context).get(req, reqWrapper, null, set);
+				if(set && _bmp==null)
+					Log.w(TAG, "error downloading image: "+req);
 				if(canceled){
 					if(DEBUG) Log.w(TAG, "_Canceled: "+this);
-					if(!reusableTasks.contains(RunnableTask.this))
-						reusableTasks.add(RunnableTask.this);
+					reuseTask(this);
 					return;
 				}
 				if(DEBUG && set && _bmp==null) Log.e(TAG, "FAILED: "+this);
 				if(set && _bmp!=null && !canceled) {
-					final Bitmap bmp=_bmp;
+					final Drawable bmp=_bmp;
 					mainThreadHandler.post(new Runnable() {
 						@Override
 						public void run() {
-							if(!reusableTasks.contains(RunnableTask.this))
-								reusableTasks.add(RunnableTask.this);
+							reuseTask(RunnableTask.this);
 							if(set && !canceled){
 								synchronized(ListImageLoader.this){
-									loadedUrls.put(makeIndex(item, image), url);
+									loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
 								}
-								if(url.equals(adapter.getImageURL(item, image)))
+								if(req.equals(adapter.getImageRequest(item, image)))
 									adapter.imageLoaded(item, image, bmp);
 							}
 						}
 					});
 				}else{
-					if(!reusableTasks.contains(RunnableTask.this))
-						reusableTasks.add(RunnableTask.this);
+					reuseTask(this);
 				}
 				if(DEBUG) Log.v(TAG, "Completed: "+this);
 			}catch(Exception x){
@@ -319,13 +299,13 @@ public class ListImageLoader {
 		}
 		
 		public void setDecode(boolean decode){
-			set=decode;
-			if(reqWrapper!=null)
-				reqWrapper.decode=decode;
+//			set=decode;
+//			if(reqWrapper!=null)
+//				reqWrapper.decode=decode;
 		}
 		
 		public String toString(){
-			return "["+item+"/"+image+"] "+url;
+			return "["+item+"/"+image+"] "+req;
 		}
 	}
 }

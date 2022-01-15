@@ -1,6 +1,7 @@
 package me.grishka.appkit.imageloader;
 
 import android.graphics.Bitmap;
+import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -10,6 +11,7 @@ import android.widget.ImageView;
 
 import androidx.annotation.Nullable;
 import me.grishka.appkit.R;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 /**
  * Created by grishka on 17.12.14.
@@ -21,42 +23,38 @@ public class ViewImageLoader {
 
 	private static Handler uiHandler = new Handler(Looper.getMainLooper());
 
-	public static void load(ImageView view, Drawable placeholder, String url) {
-		load(new ImageViewTarget(view), placeholder, url);
+	public static void load(ImageView view, Drawable placeholder, ImageLoaderRequest req) {
+		load(new ImageViewTarget(view), placeholder, req);
 	}
 
-	public static void load(Target target, Drawable placeholder, String url) {
-		load(target, placeholder, url, true);
+	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req) {
+		load(target, placeholder, req, true);
 	}
 
-	public static void load(Target target, Drawable placeholder, String url, boolean animate) {
-		load(target, placeholder, url, null, animate);
+	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, boolean animate) {
+		load(target, placeholder, req, null, animate);
 	}
 
-	public static void load(Target target, Drawable placeholder, String url, @Nullable String localPath, boolean animate) {
+	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, @Nullable String localPath, boolean animate) {
 		LoadTask prevTask = (LoadTask) target.getView().getTag(R.id.tag_image_load_task);
 		if (prevTask != null) {
 			prevTask.cancel();
 			target.getView().setTag(R.id.tag_image_load_task, null);
 		}
 
-		if (!TextUtils.isEmpty(localPath) && ImageCache.getInstance(target.getView().getContext()).isInTopCache(localPath)) {
-			target.setImageBitmap(ImageCache.getInstance(target.getView().getContext()).getFromTop(localPath));
-			return;
-		}
-		if (ImageCache.getInstance(target.getView().getContext()).isInTopCache(url)) {
-			target.setImageBitmap(ImageCache.getInstance(target.getView().getContext()).getFromTop(url));
+		if (ImageCache.getInstance(target.getView().getContext()).isInTopCache(req)) {
+			target.setImageDrawable(ImageCache.getInstance(target.getView().getContext()).getFromTop(req));
 			return;
 		}
 		target.setImageDrawable(placeholder);
 
 		LoadTask task = new LoadTask();
 		task.target = target;
-		task.url = url;
-		task.localPath = localPath;
+		task.req = req;
+		task.localPath=localPath;
 		task.animate = animate;
 		target.getView().setTag(R.id.tag_image_load_task, task);
-		if (ImageCache.getInstance(target.getView().getContext()).isInCache(url)) {
+		if (ImageCache.getInstance(target.getView().getContext()).isInCache(req)) {
 			ImageLoaderThreadPool.enqueueCachedTask(task);
 		} else {
 			ImageLoaderThreadPool.enqueueTask(task);
@@ -80,9 +78,6 @@ public class ViewImageLoader {
 
 	public interface Target {
 		void setImageDrawable(Drawable d);
-
-		void setImageBitmap(Bitmap bmp);
-
 		View getView();
 	}
 
@@ -100,11 +95,6 @@ public class ViewImageLoader {
 		}
 
 		@Override
-		public void setImageBitmap(Bitmap bmp) {
-			view.setImageBitmap(bmp);
-		}
-
-		@Override
 		public View getView() {
 			return view;
 		}
@@ -115,20 +105,20 @@ public class ViewImageLoader {
 		private boolean canceled = false;
 		private ImageCache.RequestWrapper reqWrapper;
 		public Target target;
-		public String url;
+		public ImageLoaderRequest req;
 		public boolean animate;
 		private String localPath;
 
 		public void cancel() {
 			canceled = true;
-			ImageLoaderThreadPool.enqueueCancellation(new Runnable(){public void run(){
+			ImageLoaderThreadPool.enqueueCancellation(()->{
 				try {
 					if (reqWrapper != null) {
 						reqWrapper.cancel();
 					}
 				} catch (Exception ignored) {
 				}
-			}});
+			});
 		}
 
 		@Override
@@ -138,19 +128,21 @@ public class ViewImageLoader {
 					return;
 				}
 				reqWrapper = new ImageCache.RequestWrapper();
-				final Bitmap bmp = ImageCache.getInstance(target.getView().getContext()).get(url, localPath, reqWrapper, null, true);
+				final Drawable bmp = ImageCache.getInstance(target.getView().getContext()).get(req, localPath, reqWrapper, null, true);
 				reqWrapper = null;
 				if (bmp != null && !canceled) {
-					uiHandler.post(new Runnable(){public void run(){
+					uiHandler.post(()->{
 						if (canceled) {
 							return;
 						}
-						target.setImageBitmap(bmp);
+						target.setImageDrawable(bmp);
 						if (animate) {
 							target.getView().setAlpha(0);
 							target.getView().animate().alpha(1).setDuration(200).start();
 						}
-					}});
+						if(bmp instanceof Animatable)
+							((Animatable) bmp).start();
+					});
 				}
 			} catch (Exception x) {
 				//Log.w("appkit", "Error downloading image", x);

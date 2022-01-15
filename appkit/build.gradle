@@ -21,7 +21,6 @@ dependencies {
 	implementation 'me.grishka.litex:swiperefreshlayout:1.1.0'
 	implementation 'me.grishka.litex:viewpager:1.0.0'
 	implementation 'me.grishka.litex:collection:1.1.0'
-	implementation 'com.jakewharton:disklrucache:2.0.2'
 }
 
-version = '1.0'
+version = '1.1'

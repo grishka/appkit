@@ -25,6 +25,7 @@ import me.grishka.appkit.imageloader.ImageLoaderViewHolder;
 import me.grishka.appkit.imageloader.ListImageLoaderWrapper;
 import me.grishka.appkit.imageloader.ObservableListImageLoaderAdapter;
 import me.grishka.appkit.imageloader.ImageLoaderRecyclerAdapter;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 import me.grishka.appkit.utils.AutoAssignMaxRecycledViewPool;
 
 /**
@@ -264,19 +265,19 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	@Override
-	public String getImageURL(int item, int image) {
+	public ImageLoaderRequest getImageRequest(int item, int image) {
 		RecyclerView.Adapter adapter=getAdapter();
 		if(adapter instanceof ImageLoaderRecyclerAdapter){
-			return ((ImageLoaderRecyclerAdapter)adapter).getImageURL(item, image);
+			return ((ImageLoaderRecyclerAdapter)adapter).getImageRequest(item, image);
 		}
 		return null;
 	}
 
 	@Override
-	public void imageLoaded(int item, int image, Bitmap bitmap) {
+	public void imageLoaded(int item, int image, Drawable drawable) {
 		ViewHolder holder=findViewHolderForAdapterPosition(item);
 		if(holder instanceof ImageLoaderViewHolder){
-			((ImageLoaderViewHolder)holder).setImage(image, bitmap);
+			((ImageLoaderViewHolder)holder).setImage(image, drawable);
 		}
 	}
 

@@ -1,12 +1,15 @@
 package me.grishka.appkit.imageloader;
 
 import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 
 import java.util.ArrayList;
 
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
+
 public class MergeImageLoaderAdapter implements ListImageLoaderAdapter {
 
-	private ArrayList<ListImageLoaderAdapter> pieces=new ArrayList<ListImageLoaderAdapter>();
+	private ArrayList<ListImageLoaderAdapter> pieces=new ArrayList<>();
 	
 	public MergeImageLoaderAdapter() {
 		// TODO Auto-generated constructor stub
@@ -42,12 +45,12 @@ public class MergeImageLoaderAdapter implements ListImageLoaderAdapter {
 	}
 
 	@Override
-	public String getImageURL(int position, int image) {
+	public ImageLoaderRequest getImageRequest(int position, int image) {
 		for (ListImageLoaderAdapter piece : pieces) {
             int size = piece.getCount();
 
             if (position < size) {
-                return piece.getImageURL(position, image);
+                return piece.getImageRequest(position, image);
             }
 
             position -= size;
@@ -56,14 +59,14 @@ public class MergeImageLoaderAdapter implements ListImageLoaderAdapter {
 	}
 
 	@Override
-	public void imageLoaded(int position, int image, Bitmap bitmap) {
+	public void imageLoaded(int position, int image, Drawable drawable) {
 		int _pos=position;
 		for (ListImageLoaderAdapter piece : pieces) {
             int size = piece.getCount();
 
             if (position < size) {
                 //piece.imageLoaded(position, image, bitmap);
-            	piece.imageLoaded(_pos, image, bitmap);
+            	piece.imageLoaded(_pos, image, drawable);
                 return;
             }
 

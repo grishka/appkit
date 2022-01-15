@@ -2,16 +2,21 @@ package me.grishka.appkit.imageloader;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
+import android.graphics.Movie;
+import android.graphics.drawable.AnimatedImageDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
+import android.util.LruCache;
+import android.util.Size;
 
-import com.jakewharton.disklrucache.DiskLruCache;
-
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -19,15 +24,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
-import java.math.BigInteger;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.concurrent.TimeUnit;
 
 import androidx.annotation.Nullable;
-import me.grishka.appkit.utils.NetworkUtils;
+import me.grishka.appkit.imageloader.disklrucache.DiskLruCache;
+import me.grishka.appkit.imageloader.downloaders.ContentImageDownloader;
+import me.grishka.appkit.imageloader.downloaders.FileImageDownloader;
+import me.grishka.appkit.imageloader.downloaders.HTTPImageDownloader;
+import me.grishka.appkit.imageloader.downloaders.ImageDownloader;
+import me.grishka.appkit.imageloader.processing.ImageProcessingStep;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 import okhttp3.Call;
 
 /**
@@ -37,9 +44,9 @@ public class ImageCache{
 	
 	public static final boolean DEBUG=false;
 	
-	private ArrayList<WeakReference<ListImageLoaderWrapper>> registeredLoaders=new ArrayList<WeakReference<ListImageLoaderWrapper>>();
+	private final ArrayList<WeakReference<ListImageLoaderWrapper>> registeredLoaders=new ArrayList<>();
 
-	private LruCache<String, Bitmap> cache;
+	private LruCache<String, Drawable> cache;
 	
 	private DiskLruCache diskCache=null;
 	private final Object diskCacheLock=new Object();
@@ -47,7 +54,7 @@ public class ImageCache{
 
 	private static ImageCache instance=null;
 	private static Parameters params=new Parameters();
-	private static HashMap<String, ImageDownloader> downloaders=new HashMap<>();
+	private static final ArrayList<ImageDownloader> downloaders=new ArrayList<>();
 
 	private static final String TAG="AppKit_ImageCache";
 
@@ -66,29 +73,28 @@ public class ImageCache{
 		if(instance==null){
 			instance=new ImageCache(context.getApplicationContext());
 
-			HTTPImageDownloader httpDownloader=new HTTPImageDownloader();
-			downloaders.put("http", httpDownloader);
-			downloaders.put("https", httpDownloader);
-			ContentImageDownloader contentDownloader=new ContentImageDownloader(instance);
-			downloaders.put("content", contentDownloader);
-			FileImageDownloader fileDownloader=new FileImageDownloader(instance);
-			downloaders.put("file", fileDownloader);
-			downloaders.put("", fileDownloader);
+			downloaders.add(new HTTPImageDownloader());
+			downloaders.add(new ContentImageDownloader(instance, context.getApplicationContext()));
+			downloaders.add(new FileImageDownloader(instance));
 
 			instance.appContext=context.getApplicationContext();
-			int cacheSize=Math.min(10*1024*1024, ((ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass()/params.memoryCacheSize*1024*1024);
-			instance.cache=new LruCache<String, Bitmap>(cacheSize) {
-				protected int sizeOf(String key, Bitmap value) {
-					return value.getRowBytes() * value.getHeight();
+			ActivityManager am=(ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+			int memoryClass=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_LARGE_HEAP)==0 ? am.getMemoryClass() : am.getLargeMemoryClass();
+			int cacheSize=Math.min(params.maxMemoryCacheSize, memoryClass/params.memoryCacheSize*1024*1024);
+			instance.cache=new LruCache<String, Drawable>(cacheSize) {
+				@Override
+				protected int sizeOf(String key, Drawable value) {
+					if(value instanceof BitmapDrawable)
+						return ((BitmapDrawable) value).getBitmap().getAllocationByteCount();
+					return value.getIntrinsicWidth()*value.getIntrinsicHeight()*4; // probably very conservative
 				}
-				protected void entryRemoved (boolean evicted, String key, Bitmap oldValue, Bitmap newValue){
-					//Log.i(TAG, "cache: entry removed");
+
+				@Override
+				protected void entryRemoved(boolean evicted, String key, Drawable oldValue, Drawable newValue){
 					if(newValue!=null) return;
 					for(WeakReference<ListImageLoaderWrapper> ref:instance.registeredLoaders){
 						if(ref.get()!=null)
 							ref.get().onCacheEntryRemoved(key);
-						//else
-						//	Log.w(TAG, "registered image loader is null");
 					}
 				}
 			};
@@ -105,70 +111,61 @@ public class ImageCache{
 		cache.evictAll();
 	}
 	
-	public LruCache<String, Bitmap> getLruCache(){
+	public LruCache<String, Drawable> getLruCache(){
 		return cache;
 	}
 	
-	public void remove(String url){
-		cache.remove(url);
+	public void remove(ImageLoaderRequest req){
+		cache.remove(req.getMemoryCacheKey());
 	}
 	
-	public void put(String url, Bitmap bmp){
-		cache.put(url, bmp);
+	public void put(ImageLoaderRequest req, Drawable bmp){
+		cache.put(req.getMemoryCacheKey(), bmp);
 	}
 
-	public void registerDownloader(String scheme, ImageDownloader downloader){
-		downloaders.put(scheme, downloader);
+	public static void registerDownloader(ImageDownloader downloader){
+		downloaders.add(downloader);
+	}
+
+	public static void registerDownloader(int index, ImageDownloader downloader){
+		downloaders.add(index, downloader);
+	}
+
+	public boolean isInTopCache(ImageLoaderRequest req){
+		return cache!=null && req!=null && cache.get(req.getMemoryCacheKey())!=null;
 	}
 	
-	public boolean isInTopCache(String url){
-		return cache!=null && url!=null && cache.contains(url) && cache.get(url)!=null;
+	public Drawable getFromTop(ImageLoaderRequest req){
+		return cache.get(req.getMemoryCacheKey());
 	}
 	
-	public Bitmap getFromTop(String url){
-		return cache.get(url);
-	}
-	
-	public boolean isInCache(String url){
-		if(cache.contains(url))
+	public boolean isInCache(ImageLoaderRequest req){
+		if(cache.get(req.getMemoryCacheKey())!=null)
 			return true;
 		try{
 			waitForDiskCache();
-			if(diskCache.get(fn(url))!=null)
+			if(diskCache==null) // it still might be if called from UI thread
+				return false;
+			if(diskCache.get(req.getDiskCacheKey())!=null)
 				return true;
-		}catch(Exception x){}
+		}catch(IOException x){
+			Log.w(TAG, x);
+		}
 		return false;
 	}
-	
-	private static String fn(String url){
-		return md5(url);
-	}
 
-	private static String md5(String h){
-		try {
-			MessageDigest md=MessageDigest.getInstance("MD5");
-			byte[] s=md.digest(h.getBytes("UTF-8"));
-			return String.format("%032x", new BigInteger(1, s));
-		} catch (Exception ex) {
-		}
-		return "";
-	}
-	
 	private void open(){
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				synchronized(diskCacheLock) {
-					try {
-						diskCache = DiskLruCache.open(new File(appContext.getCacheDir(), "images"), 1, 1, params.diskCacheSize);
-						for(WeakReference<ListImageLoaderWrapper> ref:registeredLoaders){
-							if(ref.get()!=null)
-								ref.get().updateImages();
-						}
-						diskCacheLock.notifyAll();
-					} catch (Exception x) {
-						Log.w(TAG, "Error opening disk cache", x);
+		new Thread(()->{
+			synchronized(diskCacheLock) {
+				try {
+					diskCache = DiskLruCache.open(new File(appContext.getCacheDir(), "images"), 1, 1, params.diskCacheSize);
+					for(WeakReference<ListImageLoaderWrapper> ref:registeredLoaders){
+						if(ref.get()!=null)
+							ref.get().updateImages();
 					}
+					diskCacheLock.notifyAll();
+				} catch (Exception x) {
+					Log.w(TAG, "Error opening disk cache", x);
 				}
 			}
 		}).start();
@@ -177,15 +174,15 @@ public class ImageCache{
 	private void waitForDiskCache(){
 		if(diskCache==null && Looper.myLooper()!=Looper.getMainLooper()) {
 			synchronized (diskCacheLock) {
-				if(diskCache==null){
-					try{diskCacheLock.wait();}catch(Exception x){}
+				while(diskCache==null){
+					try{diskCacheLock.wait();}catch(InterruptedException ignore){}
 				}
 			}
 		}
 	}
 
 	public void registerLoader(ListImageLoaderWrapper loader){
-		registeredLoaders.add(new WeakReference<ListImageLoaderWrapper>(loader));
+		registeredLoaders.add(new WeakReference<>(loader));
 		Iterator<WeakReference<ListImageLoaderWrapper>> itr=registeredLoaders.iterator();
 		while(itr.hasNext()){
 			WeakReference<ListImageLoaderWrapper> ref=itr.next();
@@ -194,281 +191,268 @@ public class ImageCache{
 		}
 	}
 
-	public Bitmap get(String url, @Nullable String persistentPath){
-		return get(url, persistentPath, null, null, true);
+	public Drawable get(ImageLoaderRequest req, @Nullable String persistentPath){
+		return get(req, persistentPath, null, null, true);
 	}
 
-	public Bitmap get(String url, RequestWrapper w, ProgressCallback pc, boolean decode){
-		return get(url, null, w, pc, decode);
+	public Drawable get(ImageLoaderRequest req, RequestWrapper w, ProgressCallback pc, boolean decode){
+		return get(req, null, w, pc, decode);
 	}
 
 	/****
-	 * Simplified version of {@link #get(String, RequestWrapper, ProgressCallback, boolean)}
-	 * @param url Image URL
+	 * Simplified version of {@link #get(ImageLoaderRequest, RequestWrapper, ProgressCallback, boolean)}
+	 * @param req Request
 	 * @return Bitmap from cache
 	 */
-	public Bitmap get(String url){
-		return get(url, null, null, null, true);
+	public Drawable get(ImageLoaderRequest req){
+		return get(req, null, null, null, true);
 	}
 	
 	/****
 	 * Get an image from cache (blocking)
-	 * @param url Image URL, http or https scheme
+	 * @param req Request
 	 * @param w RequestWrapper to cancel request or null
 	 * @param pc ProgressCallback to receive download progress or null
 	 * @param decode If false, only download to cache if not downloaded already 
 	 * @return Bitmap from cache or null if decode==false
 	 */
-	public Bitmap get(String url, @Nullable String persistentPath, RequestWrapper w, ProgressCallback pc, boolean decode){
-		if(DEBUG) Log.d(TAG, "Get image: "+decode+" "+url);
-		if(TextUtils.isEmpty(url))
-			return null;
+	public Drawable get(ImageLoaderRequest req, @Nullable String persistentPath, RequestWrapper w, ProgressCallback pc, boolean decode){
+		if(DEBUG) Log.d(TAG, "Get image: "+decode+" "+req);
 		try{
-			if(cache.contains(url)){
-				if(!decode) return null;
-				Bitmap bmp=cache.get(url);
-				if(DEBUG) Log.v(TAG, url+" -> [ram] "+bmp);
-				if(bmp!=null)return bmp;
-				else cache.remove(url);
+			String memKey=req.getMemoryCacheKey();
+			Drawable bmp=cache.get(memKey);
+			if(bmp!=null){
+				return bmp;
 			}
 			waitForDiskCache();
-			DiskLruCache.Snapshot entry;
-			String scheme="";
-			for(int i=0;i<url.length();i++){
-				if(url.charAt(i)==':'){
-					scheme=url.substring(0, i);
+			DiskLruCache.Value entry;
+			ImageDownloader downloader=null;
+			for(ImageDownloader candidate:downloaders){
+				if(candidate.canHandleRequest(req)){
+					downloader=candidate;
 					break;
 				}
 			}
-			ImageDownloader downloader=downloaders.get(scheme);
+			if(downloader==null){
+				Log.w(TAG, "Could not find a downloader to perform request "+req);
+				return null;
+			}
 
-			if(!downloader.isFileBased()){
-				Bitmap bmp=downloader.getBitmap(url, decode, w);
+			if(!downloader.needsDiskCache()){
+				bmp=downloader.getDrawable(req, decode, w);
 				if(bmp!=null)
-					cache.put(url, bmp);
+					cache.put(memKey, bmp);
 				return bmp;
 			}
 
-			if(TextUtils.isEmpty(persistentPath)) {
+			String diskKey=req.getDiskCacheKey();
+
+			if(persistentPath==null){
 				waitForDiskCache();
-				entry = diskCache.get(fn(url));
-				if (entry != null && (!decode || isValidBitmap(entry))) {
-					InputStream in = entry.getInputStream(0);
-					int[] size = {0,0};
-					Bitmap bmp = decode ? decodeImage(in, size[0], size[1]) : null;
-					in.close();
-					if (decode) {
-						try {
-							cache.put(url, bmp);
-						} catch (Exception x) {
-						}
-					}
-					if (DEBUG) Log.v(TAG, url + " -> [disk] " + bmp);
+				entry = diskCache.get(diskKey);
+				if(entry!=null){
+					bmp=decode ? decodeImage(entry.getFile(0), null, req) : null;
+					if(decode)
+						cache.put(memKey, bmp);
+					if(DEBUG)
+						Log.v(TAG, req + " -> [disk] " + bmp);
 					return bmp;
 				}
-			} else {
+			}else{
 				File file = new File(persistentPath);
-				InputStream is = null;
-				OutputStream os = null;
-				try {
-					if(file.exists()) {
-						final Bitmap bitmap = decodeImage(is = new FileInputStream(file), 0, 0);
-						if(bitmap == null) {
-							file.delete();
-							File parent = file.getParentFile();
-							if(parent.exists() || parent.mkdirs()) {
-								if(file.createNewFile()) {
-									downloadFile(url, w, pc, os = new FileOutputStream(file));
-									return decodeImage(is = new FileInputStream(file), 0, 0);
-								}
-							}
-						}
-						cache.put(persistentPath, bitmap);
-						return bitmap;
-					} else {
+				if(file.exists()) {
+					bmp=decodeImage(file, null, req);
+					if(bmp==null){
+						file.delete();
 						File parent = file.getParentFile();
-						if(parent.exists() || parent.mkdirs()) {
-							if(file.createNewFile()) {
-								downloadFile(url, w, pc, os = new FileOutputStream(file));
-								return decodeImage(is = new FileInputStream(file), 0, 0);
+						if(parent.exists() || parent.mkdirs()){
+							if(file.createNewFile()){
+								try(FileOutputStream out=new FileOutputStream(file)){
+									downloadFile(req, w, pc, out);
+								}
+								return decodeImage(file, null, req);
 							}
 						}
-						return null;
 					}
-				} finally {
-					try {
-						if (is != null) {
-							is.close();
+					cache.put(memKey, bmp);
+					return bmp;
+				} else {
+					File parent = file.getParentFile();
+					if(parent.exists() || parent.mkdirs()) {
+						if(file.createNewFile()) {
+							try(FileOutputStream out=new FileOutputStream(file)){
+								downloadFile(req, w, pc, out);
+							}
+							return decodeImage(file, null, req);
 						}
-						if (os != null) {
-							os.close();
-						}
-					} catch (IOException ignored) {}
+					}
+					return null;
 				}
 			}
 			DiskLruCache.Editor editor=null;
 			try{
-				editor=diskCache.edit(fn(url));
+				editor=diskCache.edit(diskKey);
 				if(editor==null){
-					while((editor=diskCache.edit(fn(url)))==null){
+					while((editor=diskCache.edit(diskKey))==null){
 						Thread.sleep(10);
 					}
 					editor.abort();
-					return get(url, persistentPath, w, pc, decode);
+					return get(req, null, w, pc, decode);
 				}
-				OutputStream out=editor.newOutputStream(0);
-				//boolean ok=downloadFile(realURL, w, pc, out);
-				boolean ok=downloader.downloadFile(url, out, pc, w);
-				out.close();
+				boolean ok;
+				try(OutputStream out=new FileOutputStream(editor.getFile(0))){
+					ok=downloader.downloadFile(req, out, pc, w);
+				}
 				if(ok){
 					editor.commit();
 				}else{
 					editor.abort();
-					diskCache.remove(fn(url));
+					diskCache.remove(diskKey);
 					return null;
 				}
-				editor=null;
 			}catch(Exception x){
-				Log.w(TAG, x);
-				if(editor!=null){
+				if(w==null || !w.canceled)
+					Log.w(TAG, x);
+				if(editor!=null)
 					editor.abort();
-				}
 			}
-			entry=diskCache.get(fn(url));
-			InputStream in=entry.getInputStream(0);
+			entry=diskCache.get(diskKey);
 			if(w!=null) decode=w.decode;
-               if(decode){
-                   if(!isValidBitmap(entry)){
-                       in.close();
-                       diskCache.remove(fn(url));
-                       return null;
-                   }
-               }
-			Bitmap bmp=decode ? decodeImage(in, 0, 0) : null;
-			if(decode){
-				try{
-					cache.put(url, bmp);
-				}catch(Exception x){}
+			if(entry!=null){
+				bmp=decode ? decodeImage(entry.getFile(0), null, req) : null;
 			}
-			if(DEBUG) Log.v(TAG, url+" -> [download] "+bmp);
+			if(decode && bmp!=null){
+				cache.put(memKey, bmp);
+			}
+			if(DEBUG) Log.v(TAG, req+" -> [download] "+bmp);
 			return bmp;
 		}catch(Throwable x){
-			Log.w(TAG, url, x);
+			Log.w(TAG, req.toString(), x);
 		}
-		//Log.e(TAG, "WTF2");
 		return null;
 	}
 
-	private static boolean isValidBitmap(DiskLruCache.Snapshot e){
-		InputStream is=e.getInputStream(0);
-		//int w=0, h=0;
-		try{
-			DataInputStream in=new DataInputStream(is);
-			int header=in.readInt();
-			((FileInputStream)is).getChannel().position(e.getLength(0)-4);
-			int trailer=in.readInt();
-			//int header=((int)_header[0]&0xFF << 24) | ((int)_header[1] << 16) | ((int)_header[2] << 8) | (int)_header[3];
-			//int trailer=((int)_trailer[0] << 24) | ((int)_trailer[1] << 16) | ((int)_trailer[2] << 8) | (int)_trailer[3];
-			//Log.i(TAG, String.format("Header=%08X, trailer=%08X", header, trailer));
-			if((header & 0xFFFF0000)==0xFFD80000 && (trailer & 0xFFFF)==0xFFD9){ // jpeg
-				//Log.v(TAG, "Matched: JPEG");
-				return true;
-			}
-			if(header==0x47494638 && (trailer & 0xFF)==0x3B){ // gif
-				//Log.v(TAG, "Matched: GIF");
-				return true;
-			}
-			if(header==0x89504E47 && trailer==0xAE426082){ // png
-				//Log.v(TAG, "Matched: PNG");
-				return true;
-			}
-			if(header==0x52494646){ // webp
-				((FileInputStream)is).getChannel().position(4);
-				int fileSize=Integer.reverseBytes(in.readInt());
-				//Log.i(TAG, "Webp file size: "+fileSize+", expected: "+e.getLength(0));
-				return e.getLength(0)==fileSize+8;
-			}
-		}catch(Throwable x){
-			Log.w(TAG, x);
-		}
-		//Log.w(TAG, "No match!");
-		//if(w<=0 || h<=0){
-			try{
-				is.close();
-			}catch(Exception x){}
-		//}
-		//Log.i(TAG, "is valid: "+w+"x"+h);
-		return false;
-	}
-	
-	public Bitmap decodeImage(InputStream data, int w, int h){
-		if(data==null){
+	public Drawable decodeImage(File file, Uri uri, ImageLoaderRequest req){
+		if(file==null && uri==null){
 			Log.w(TAG, "tried to decode null image");
 			return null;
 		}
 		try{
-			BitmapFactory.Options opts1=new BitmapFactory.Options();
-			opts1.inJustDecodeBounds=true;
-			if(data instanceof FileInputStream) ((FileInputStream)data).getChannel().position(0);
-			BitmapFactory.decodeStream(data, null, opts1);
-			if(data instanceof FileInputStream) ((FileInputStream)data).getChannel().position(0);
-			int sampleSize=1;
-			if(w!=0 || h!=0) {
-				if(w!=0 && h!=0){
-					sampleSize=Math.max((int)Math.floor(opts1.outWidth / (float) w), (int)Math.floor(opts1.outHeight / (float) h));
-				}else if(w!=0){
-					sampleSize=(int)Math.floor(opts1.outWidth / (float) w);
-				}else if(h!=0){
-					sampleSize=(int)Math.floor(opts1.outHeight / (float) h);
+			Drawable drawable;
+			if(Build.VERSION.SDK_INT>=28){
+				ImageDecoder.Source source;
+				if(file!=null)
+					source=ImageDecoder.createSource(file);
+				else
+					source=ImageDecoder.createSource(appContext.getContentResolver(), uri);
+				drawable=ImageDecoder.decodeDrawable(source, (decoder, info, src) -> {
+					if(req.desiredMaxWidth!=0 || req.desiredMaxHeight!=0){
+						Size size=info.getSize();
+						int w=size.getWidth();
+						int h=size.getHeight();
+						if(req.desiredMaxHeight!=0 && req.desiredMaxWidth!=0 && (w>req.desiredMaxWidth || h>req.desiredMaxHeight)){
+							float ratio=Math.max(w/(float)req.desiredMaxWidth, h/(float)req.desiredMaxHeight);
+							decoder.setTargetSize(Math.round(w/ratio), Math.round(h/ratio));
+						}else if(req.desiredMaxHeight==0 && w>req.desiredMaxWidth){
+							decoder.setTargetSize(req.desiredMaxWidth, Math.round(req.desiredMaxWidth/(float)w*h));
+						}else if(req.desiredMaxWidth==0 && h>req.desiredMaxHeight){
+							decoder.setTargetSize(Math.round(req.desiredMaxHeight/(float)h*w), req.desiredMaxHeight);
+						}
+					}
+					if(req.desiredConfig!=Bitmap.Config.HARDWARE){
+						decoder.setMutableRequired(true);
+					}
+				});
+			}else{
+				boolean isAnimatedGif=false;
+				BitmapFactory.Options opts1=new BitmapFactory.Options();
+				opts1.inJustDecodeBounds=true;
+				if(file!=null){
+					try(FileInputStream in=new FileInputStream(file)){
+						BitmapFactory.decodeStream(in, null, opts1);
+						in.getChannel().position(0);
+						isAnimatedGif=isAnimatedGif(in);
+					}
+				}else{
+					try(InputStream in=appContext.getContentResolver().openInputStream(uri)){
+						BitmapFactory.decodeStream(in, null, opts1);
+					}
 				}
-			}else if(opts1.outWidth>1500 || opts1.outHeight>1500){
-				Log.w(TAG, "Image too big: "+opts1.outWidth+"x"+opts1.outHeight);
-				sampleSize=Math.max(opts1.outWidth, opts1.outHeight)/1500;
-				Log.w(TAG, "Image will be downscaled to "+sampleSize+" times smaller");
-				//return null;
+				if(isAnimatedGif){
+					Movie movie=Movie.decodeFile(file.getAbsolutePath());
+					drawable=new MovieDrawable(movie);
+				}else{
+					int sampleSize=1;
+					int w=req.desiredMaxWidth;
+					int h=req.desiredMaxHeight;
+					if(w!=0 || h!=0){
+						if(w!=0 && h!=0){
+							sampleSize=Math.max((int) Math.floor(opts1.outWidth/(float) w), (int) Math.floor(opts1.outHeight/(float) h));
+						}else if(w!=0){
+							sampleSize=(int) Math.floor(opts1.outWidth/(float) w);
+						}else if(h!=0){
+							sampleSize=(int) Math.floor(opts1.outHeight/(float) h);
+						}
+					}
+
+					BitmapFactory.Options opts=new BitmapFactory.Options();
+					opts.inDither=false;
+					opts.inSampleSize=sampleSize;
+					opts.inPreferredConfig=req.desiredConfig;
+					Bitmap bmp;
+					if(file!=null){
+						bmp=BitmapFactory.decodeFile(file.getAbsolutePath(), opts);
+					}else{
+						try(InputStream in=appContext.getContentResolver().openInputStream(uri)){
+							bmp=BitmapFactory.decodeStream(in, null, opts);
+						}
+					}
+					if(w!=0){
+						int dw=w;
+						int dh=Math.round((float) bmp.getHeight()/bmp.getWidth()*w);
+						bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
+					}else if(h!=0){
+						int dw=Math.round((float) bmp.getWidth()/bmp.getHeight()*h);
+						int dh=h;
+						bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
+					}
+					drawable=new BitmapDrawable(bmp);
+				}
 			}
-			
-			BitmapFactory.Options opts=new BitmapFactory.Options();
-			opts.inDither=false;
-			opts.inSampleSize=sampleSize;
-			//return BitmapFactory.decodeByteArray(data, 0, data.length, opts);
-			Bitmap bmp=BitmapFactory.decodeStream(data, null, opts);
-			if(w!=0){
-				int dw=w;
-				int dh=Math.round((float) bmp.getHeight() / bmp.getWidth() * w);
-				bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
-			}else if(h!=0){
-				int dw=Math.round((float)bmp.getWidth()/bmp.getHeight()*h);
-				int dh=h;
-				bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
-			}
-			return bmp;
+
+			for(ImageProcessingStep step:req.processingSteps)
+				drawable=step.processDrawable(drawable);
+
+			return drawable;
 		}catch(Throwable t){ // We don't want to crash
 			Log.e(TAG, "OH SHI~", t);
 			if(cache.size()>1024){
 				cache.evictAll();
 				System.gc();
 				
-				return decodeImage(data, w, h);
+				return decodeImage(file, uri, req);
 			}
 		}
 		Log.e(TAG, "WTF?!");
 		return null;
 	}
 
-	public boolean downloadFile(String url, ImageCache.RequestWrapper w, ImageCache.ProgressCallback pc, OutputStream out){
-		String scheme="";
-		for(int i=0;i<url.length();i++){
-			if(url.charAt(i)==':'){
-				scheme=url.substring(0, i);
+	public boolean downloadFile(ImageLoaderRequest req, ImageCache.RequestWrapper w, ImageCache.ProgressCallback pc, OutputStream out){
+		ImageDownloader downloader=null;
+		for(ImageDownloader candidate:downloaders){
+			if(candidate.canHandleRequest(req)){
+				downloader=candidate;
 				break;
 			}
 		}
-		ImageDownloader downloader=downloaders.get(scheme);
-		if(downloader==null || !downloader.isFileBased())
+		if(downloader==null){
+			Log.w(TAG, "Could not find a downloader to perform request "+req);
+			return false;
+		}
+		if(!downloader.needsDiskCache())
 			return false;
 		try{
-			return downloader.downloadFile(url, out, pc, w);
+			return downloader.downloadFile(req, out, pc, w);
 		}catch(IOException e){
 			return false;
 		}
@@ -499,19 +483,54 @@ public class ImageCache{
 		}
 	}
 
-	/*package*/ Context getAppContext(){
-		return appContext;
+	private boolean isAnimatedGif(InputStream in) throws IOException{
+		byte[] magic=new byte[6];
+		if(in.read(magic)!=6 || magic[0]!='G' || magic[1]!='I' || magic[2]!='F' || magic[3]!='8' || (magic[4]!='9' && magic[4]!='7') || magic[5]!='a')
+			return false; // it's not a gif in the first place
+		if(in.skip(4)<4) // width & height
+			return false;
+		int flags=in.read();
+		if(in.skip(2)<2) // background color & pixel aspect
+			return false;
+		if((flags & 0x80)==0x80){ // global color table
+			int tableLength=(2 << (flags & 7))*3;
+			if(in.skip(tableLength)<tableLength)
+				return false;
+		}
+		int extCode=in.read();
+		while(extCode==0x21){
+			int extType=in.read();
+			if(extType==0xFF){ // application extension, specifies loop count, so this is an animation
+				return true;
+			}else if(extType==0x01){ // plain text extension
+				int length=in.read();
+				if(in.skip(length)<length)
+					return false;
+			}else if(extType==0xF9){ // graphics control extension
+				if(in.skip(1)!=1) // length
+					return false;
+				int controlFlags=in.read();
+				return (controlFlags & 0x1C)!=0; // it's probably an animation if it has something in "disposal method"
+			}
+			extCode=in.read();
+		}
+		return false;
 	}
-	
-	public static interface ProgressCallback{
-		public void onProgressChanged(int progress, int total);
+
+	public interface ProgressCallback{
+		void onProgressChanged(int progress, int total);
 	}
 
 	public static class Parameters{
 		/**
 		 * The max size of the in-memory cache as a fraction of total RAM available to the app as per ActivityManager.getMemoryClass()
 		 */
-		public int memoryCacheSize=7;
+		public int memoryCacheSize=5;
+
+		/**
+		 * Limit to the size of in-memory cache in bytes
+		 */
+		public int maxMemoryCacheSize=50*1024*1024;
 
 		/**
 		 * Max size of the disk cache in bytes

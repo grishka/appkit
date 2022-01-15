@@ -6,6 +6,9 @@ import android.os.Parcelable;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
+import me.grishka.appkit.imageloader.requests.UrlImageLoaderRequest;
+
 public class Photo implements Parcelable{
 	public int id;
 	public int albumID;
@@ -13,12 +16,16 @@ public class Photo implements Parcelable{
 	public String url;
 	public String thumbnailUrl;
 
+	public ImageLoaderRequest thumbnailRequest;
+
 	public Photo(JSONObject obj) throws JSONException{
 		id=obj.getInt("id");
 		albumID=obj.getInt("albumId");
 		title=obj.getString("title");
 		url=obj.getString("url");
 		thumbnailUrl=obj.getString("thumbnailUrl");
+
+		thumbnailRequest=new UrlImageLoaderRequest(thumbnailUrl);
 	}
 
 

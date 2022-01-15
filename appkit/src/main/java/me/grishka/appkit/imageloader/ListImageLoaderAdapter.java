@@ -1,12 +1,13 @@
 package me.grishka.appkit.imageloader;
 
-import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
+
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 public interface ListImageLoaderAdapter {
-
-	public int getCount();
-	public int getImageCountForItem(int item);
-	public String getImageURL(int item, int image);
-	public void imageLoaded(int item, int image, Bitmap bitmap);
+	int getCount();
+	int getImageCountForItem(int item);
+	ImageLoaderRequest getImageRequest(int item, int image);
+	void imageLoaded(int item, int image, Drawable drawable);
 
 }

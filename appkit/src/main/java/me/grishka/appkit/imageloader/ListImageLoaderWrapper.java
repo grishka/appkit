@@ -1,6 +1,7 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
+import android.database.DataSetObserver;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
@@ -14,6 +15,7 @@ import android.widget.ListView;
 import java.lang.reflect.Method;
 
 import androidx.annotation.DrawableRes;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 
@@ -84,6 +86,7 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		}
 	};
 	private float prefetchScreens=1;
+	private boolean isActive=true;
 	
 	private static final String TAG="appkit-img-wrapper";
 
@@ -182,31 +185,33 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 		imgLoader.commitPartialCancel();
 	}
-	
-	public void clear(){
-		//imgLoader.clear();
-	}
-	
+
 	public void activate(){
-		//imgLoader.activate();
-		updateImages();
+		if(isActive)
+			return;
+		if(list!=null){
+			list.getView().getViewTreeObserver().addOnPreDrawListener(preDrawListener);
+			reloadRange(list.getFirstVisiblePosition(), list.getVisibleItemCount());
+		}
+		isActive=true;
 	}
 	
 	public void deactivate(){
+		if(!isActive)
+			return;
 		imgLoader.cancelAll();
 		if (list != null) {
 			list.getView().getViewTreeObserver().removeOnPreDrawListener(preDrawListener);
 		}
+		isActive=false;
 	}
 	
-	public boolean isAlreadyLoaded(String url){
-		//return imgLoader.isAlreadyLoaded(url);
-		return ImageCache.getInstance(context).isInTopCache(url);
+	public boolean isAlreadyLoaded(ImageLoaderRequest req){
+		return ImageCache.getInstance(context).isInTopCache(req);
 	}
 	
-	public Bitmap get(String url){
-		//return imgLoader.getImage(url);
-		return ImageCache.getInstance(context).getFromTop(url);
+	public Drawable get(ImageLoaderRequest req){
+		return ImageCache.getInstance(context).getFromTop(req);
 	}
 
 	public interface Listener{
@@ -342,22 +347,22 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		return 0;
 	}
 
-	public void bindImageView(ImageView view, @DrawableRes int placeholderRes, String url){
-		bindImageView(view, view.getContext().getResources().getDrawable(placeholderRes), url);
+	public void bindImageView(ImageView view, @DrawableRes int placeholderRes, ImageLoaderRequest req){
+		bindImageView(view, view.getContext().getResources().getDrawable(placeholderRes), req);
 	}
 
-	public void bindImageView(ImageView view, Drawable placeholder, String url){
-		if(isAlreadyLoaded(url))
-			view.setImageBitmap(get(url));
+	public void bindImageView(ImageView view, Drawable placeholder, ImageLoaderRequest req){
+		if(isAlreadyLoaded(req))
+			view.setImageDrawable(get(req));
 		else
 			view.setImageDrawable(placeholder);
 	}
 
 	public void bindViewHolder(ImageLoaderRecyclerAdapter adapter, ImageLoaderViewHolder holder, int position){
 		for(int i=0;i<adapter.getImageCountForItem(position);i++){
-			String url=adapter.getImageURL(position, i);
-			if(isAlreadyLoaded(url))
-				holder.setImage(i, get(url));
+			ImageLoaderRequest req=adapter.getImageRequest(position, i);
+			if(isAlreadyLoaded(req))
+				holder.setImage(i, get(req));
 			else
 				holder.clearImage(i);
 		}
@@ -381,14 +386,14 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		}
 	}
 
-	public static interface ListViewDelegate{
-		public int getVisibleItemCount();
-		public int getFirstVisiblePosition();
-		public int getLastVisiblePosition();
-		public View getView();
-		public View getItemView(int index);
-		public void setOnScrollListener(AbsListView.OnScrollListener listener);
-		public boolean isVertical();
+	public interface ListViewDelegate{
+		int getVisibleItemCount();
+		int getFirstVisiblePosition();
+		int getLastVisiblePosition();
+		View getView();
+		View getItemView(int index);
+		void setOnScrollListener(AbsListView.OnScrollListener listener);
+		boolean isVertical();
 	}
 
 	public static class DefaultListViewDelegate implements ListViewDelegate{

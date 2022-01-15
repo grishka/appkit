@@ -8,6 +8,7 @@ import java.util.HashMap;
 
 import androidx.recyclerview.widget.RecyclerView;
 import me.grishka.appkit.imageloader.ImageLoaderRecyclerAdapter;
+import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 /**
  * A RecyclerView adapter which merges multiple other adapters into a single list.
@@ -149,10 +150,10 @@ public class MergeRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.View
 	}
 
 	@Override
-	public String getImageURL(int position, int image) {
+	public ImageLoaderRequest getImageRequest(int position, int image) {
 		RecyclerView.Adapter adapter=getAdapterForPosition(position);
 		if(adapter instanceof ImageLoaderRecyclerAdapter){
-			return ((ImageLoaderRecyclerAdapter)adapter).getImageURL(getAdapterPosition(position), image);
+			return ((ImageLoaderRecyclerAdapter)adapter).getImageRequest(getAdapterPosition(position), image);
 		}
 		return null;
 	}
