@@ -36,6 +36,8 @@ public class MovieDrawable extends Drawable implements Animatable{
 
 	@Override
 	public void start(){
+		if(running)
+			return;
 		startTime=SystemClock.uptimeMillis();
 		running=true;
 		invalidateSelf();
@@ -54,7 +56,9 @@ public class MovieDrawable extends Drawable implements Animatable{
 	@Override
 	public void draw(@NonNull Canvas canvas){
 		if(running){
-			movie.setTime((int)(SystemClock.uptimeMillis()-startTime)%movie.duration());
+			int duration=movie.duration();
+			if(duration>0)
+				movie.setTime((int)(SystemClock.uptimeMillis()-startTime)%duration);
 			bitmapCanvas.drawColor(0xFFFFFFFF, PorterDuff.Mode.CLEAR); // needed to support transparent gifs
 			movie.draw(bitmapCanvas, 0, 0);
 			invalidateSelf();

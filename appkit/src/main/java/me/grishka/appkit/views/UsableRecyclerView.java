@@ -20,6 +20,7 @@ import android.view.ViewGroup;
 import java.util.ArrayList;
 
 import androidx.annotation.DrawableRes;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 import me.grishka.appkit.imageloader.ImageLoaderViewHolder;
 import me.grishka.appkit.imageloader.ListImageLoaderWrapper;
@@ -43,6 +44,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private ViewHolder clickingViewHolder;
 	private View highlightedView;
 	private Rect highlightBounds=new Rect();
+	@Nullable
 	private Drawable highlight;
 	private AdapterDataObserver emptyViewObserver=new AdapterDataObserver() {
 		@Override
@@ -294,7 +296,8 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private void endClick(){
 		if(clickingViewHolder!=null){
 			clickingViewHolder.itemView.setPressed(false);
-			highlight.setState(ENABLED_STATE_SET);
+			if(highlight!=null)
+				highlight.setState(ENABLED_STATE_SET);
 			clickingViewHolder=null;
 		}
 	}
@@ -302,7 +305,8 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private void showHighlight(){
 		if(clickingViewHolder!=null){
 			didHighlight=true;
-			highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
+			if(highlight!=null)
+				highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
 			clickingViewHolder.itemView.setPressed(true);
 			invalidate();
 		}

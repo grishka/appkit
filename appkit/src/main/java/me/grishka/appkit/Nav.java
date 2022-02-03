@@ -65,7 +65,6 @@ public class Nav{
 	}
 
 	public static void finish(Fragment fragment){
-		// TODO make this saner
-		fragment.getActivity().onBackPressed();
+		((FragmentStackActivity)fragment.getActivity()).removeFragment(fragment);
 	}
 }

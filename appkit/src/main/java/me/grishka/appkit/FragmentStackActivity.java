@@ -4,24 +4,21 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
-import android.content.res.Configuration;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
-import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import me.grishka.appkit.fragments.AppKitFragment;
+import me.grishka.appkit.fragments.OnBackPressedListener;
 import me.grishka.appkit.fragments.WindowInsetsAwareFragment;
 import me.grishka.appkit.utils.CubicBezierInterpolator;
 import me.grishka.appkit.utils.V;
@@ -120,7 +117,8 @@ public class FragmentStackActivity extends Activity{
 					for(int i=0; i<fragmentContainers.size()-1; i++){
 						View container=fragmentContainers.get(i);
 						if(container.getVisibility()==View.VISIBLE){
-							getFragmentManager().beginTransaction().hide(getFragmentManager().findFragmentById(container.getId())).commit();
+							Fragment otherFragment=getFragmentManager().findFragmentById(container.getId());
+							getFragmentManager().beginTransaction().hide(otherFragment).commit();
 							getFragmentManager().executePendingTransactions();
 							container.setVisibility(View.GONE);
 						}
@@ -163,9 +161,9 @@ public class FragmentStackActivity extends Activity{
 		showFragment(fragment);
 	}
 
-	@Override
-	public void onBackPressed(){
-		if(fragmentContainers.size()>1){
+	public void removeFragment(Fragment target){
+		Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
+		if(target==currentFragment){ // top-most, remove with animation and show whatever is underneath
 			final FrameLayout wrap=fragmentContainers.remove(fragmentContainers.size()-1);
 			final Fragment fragment=getFragmentManager().findFragmentById(wrap.getId());
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
@@ -208,7 +206,31 @@ public class FragmentStackActivity extends Activity{
 			});
 			InputMethodManager imm=(InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
 			imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
-			return;
+		}else{
+			int id=target.getId();
+			for(FrameLayout wrap:fragmentContainers){
+				if(wrap.getId()==id){
+					getFragmentManager().beginTransaction().remove(target).commit();
+					getFragmentManager().executePendingTransactions();
+					content.removeView(wrap);
+					fragmentContainers.remove(wrap);
+					return;
+				}
+			}
+			throw new IllegalArgumentException("Fragment "+target+" is not from this activity");
+		}
+	}
+
+	@Override
+	public void onBackPressed(){
+		if(!fragmentContainers.isEmpty()){
+			Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
+			if(currentFragment instanceof OnBackPressedListener && ((OnBackPressedListener) currentFragment).onBackPressed())
+				return;
+			if(fragmentContainers.size()>1){
+				removeFragment(currentFragment);
+				return;
+			}
 		}
 		super.onBackPressed();
 	}

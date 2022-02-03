@@ -42,4 +42,8 @@ public abstract class BindableViewHolder<T> extends UsableRecyclerView.ViewHolde
 	protected <VT extends View> VT findViewById(@IdRes int id){
 		return itemView.findViewById(id);
 	}
+
+	public void rebind(){
+		onBind(item);
+	}
 }

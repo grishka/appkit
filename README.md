@@ -23,27 +23,23 @@ It loads images in multiple threads and caches them both in memory and on disk. 
 #### ViewImageLoader
 Loads an image into an ImageView or a custom view capable of displaying an image (via an adapter). To load an image into an ImageView:
 ```java
-ViewImageLoader.load(imageView, getResources().getDrawable(R.drawable.placeholder), url);
+ViewImageLoader.load(imageView, getResources().getDrawable(R.drawable.placeholder), new UrlImageLoaderRequest(url));
 ```
 If you'd like to load an image into a custom view, you'll need to implement the `ViewImageLoader.Target` interface and pass that instead of the ImageView:
 ```java
 ViewImageLoader.load(new ViewImageLoader.Target(){
 	@Override
-    public void setImageBitmap(Bitmap bitmap){
-		// Image had loaded. Set it to your view.
-	}
-	
-	@Override
     public void setImageDrawable(Drawable drawable){
-		// Set a placeholder drawable.
+		// Set a drawable. Either placeholder or the loaded image.
 	}
 	
 	@Override
     public View getView(){
 		// Return your view. The image loader sets a tag on it to keep its internal state.
+        // Also fades it in if you want it to load with animation.
 		return yourView;
 	}
-}, getResources().getDrawable(R.drawable.placeholder), url);
+}, getResources().getDrawable(R.drawable.placeholder), new UrlImageLoaderRequest(url));
 ```
 #### ListImageLoaderWrapper
 You probably don't want to use this directly as it's already set up correctly in BaseListFragment and BaseRecyclerFragment. This version loads images into list items in a ListView or RecyclerView.
@@ -97,13 +93,12 @@ You can also provide a `SelectorBoundsProvider` to extend the highlight to more 
 ## Dependencies
 
 * [LiteX](https://github.com/grishka/litex) RecyclerView, SwipeRefreshLayout, ViewPager, collection
-* [Jake Wharton's DiskLruCache](https://github.com/JakeWharton/DiskLruCache)
 * [Okhttp3](https://github.com/square/okhttp) as an `api` dependency because you probably want the newest version, see [their changelog](https://github.com/square/okhttp/blob/master/docs/changelog_3x.md)
 
 ## Usage
 
 ```groovy
 dependencies {
-    implementation 'me.grishka.appkit:appkit:1.0'
+    implementation 'me.grishka.appkit:appkit:1.2'
 }
 ```

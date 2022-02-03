@@ -141,6 +141,8 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	public void updateImages(){
 		if(wasFastScrolling)
 			return;
+		if(!isActive)
+			return;
 		//Log.d("appkit", "update images");
 		final Runnable r=new Runnable() {
 			boolean updated=false;
@@ -230,6 +232,8 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 
 	@Override
 	public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+		if(!isActive)
+			return;
 		if(scrollListener!=null) scrollListener.onScroll(view, firstVisibleItem, visibleItemCount, totalItemCount);
 		if(viStart!=firstVisibleItem)
 			lastScrollFwd=viStart<firstVisibleItem;
@@ -294,6 +298,8 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	@Override
 	public void onScrollStateChanged(AbsListView view, int scrollState) {
 		//Log.i(TAG, "Scroll state changed: "+scrollState);
+		if(!isActive)
+			return;
 		if(scrollState!=SCROLL_STATE_IDLE){
 			realScrollStateChanged(scrollState);
 			isScrolling=true;
@@ -359,6 +365,8 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	}
 
 	public void bindViewHolder(ImageLoaderRecyclerAdapter adapter, ImageLoaderViewHolder holder, int position){
+		if(!isActive)
+			return;
 		for(int i=0;i<adapter.getImageCountForItem(position);i++){
 			ImageLoaderRequest req=adapter.getImageRequest(position, i);
 			if(isAlreadyLoaded(req))
