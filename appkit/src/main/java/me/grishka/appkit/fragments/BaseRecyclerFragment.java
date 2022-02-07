@@ -134,8 +134,10 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			list.setLayoutManager(lmgr);
 		list.setHasFixedSize(true);
 
-		refreshLayout.setOnRefreshListener(this);
-		refreshLayout.setEnabled(refreshEnabled);
+		if(refreshLayout!=null){
+			refreshLayout.setOnRefreshListener(this);
+			refreshLayout.setEnabled(refreshEnabled);
+		}
 		if(list instanceof EmptyViewCapable)
 			((EmptyViewCapable)list).setEmptyView(emptyView);
 		if(list instanceof ListImageLoaderAdapter){
@@ -240,7 +242,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		if(list==null) return;
 		if(refreshing)
 			refreshDone();
-		V.setVisibilityAnimated(refreshLayout, View.VISIBLE);
+		V.setVisibilityAnimated(refreshLayout!=null ? refreshLayout : contentWrap, View.VISIBLE);
 		V.setVisibilityAnimated(progress, View.GONE);
 		V.setVisibilityAnimated(errorView, View.GONE);
 	}
@@ -308,7 +310,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		if(refreshing)
 			refreshDone();
 
-		V.setVisibilityAnimated(refreshLayout, View.VISIBLE);
+		V.setVisibilityAnimated(refreshLayout!=null ? refreshLayout : contentWrap, View.VISIBLE);
 		V.setVisibilityAnimated(progress, View.GONE);
 	}
 

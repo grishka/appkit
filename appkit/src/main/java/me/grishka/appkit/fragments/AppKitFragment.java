@@ -29,6 +29,7 @@ import android.widget.Toolbar;
 
 import java.util.List;
 
+import androidx.annotation.LayoutRes;
 import me.grishka.appkit.R;
 import me.grishka.appkit.utils.StubListAdapter;
 import me.grishka.appkit.utils.V;
@@ -48,7 +49,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	private boolean titleMarquee=true, subtitleMarquee=true;
 	private FragmentResultCallback resultCallback;
 	private View rootView;
-	private TextView toolbarTitleView, toolbarSubtitleView;
+	protected TextView toolbarTitleView, toolbarSubtitleView;
 	private boolean ignoreSpinnerSelection;
 	private boolean resumed;
 	private boolean hidden;
@@ -285,11 +286,16 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 				navigationSpinner.setSelection(selectedItem);
 				ignoreSpinnerSelection=false;
 			}
-			toolbar=(Toolbar)LayoutInflater.from(getActivity()).inflate(R.layout.appkit_toolbar, parent, false);
+			toolbar=(Toolbar)LayoutInflater.from(getActivity()).inflate(getToolbarResource(), parent, false);
 			parent.addView(toolbar, index);
 			initToolbar();
 			updateToolbarMarquee();
 		}
+	}
+
+	@LayoutRes
+	protected int getToolbarResource(){
+		return R.layout.appkit_toolbar;
 	}
 
 
