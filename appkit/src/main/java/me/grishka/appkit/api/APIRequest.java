@@ -25,6 +25,7 @@ public abstract class APIRequest<T> {
 		uiThreadHandler.post(new Runnable(){
 			@Override
 			public void run(){
+				onRequestDone();
 				callback.onSuccess(result);
 			}
 		});
@@ -36,8 +37,13 @@ public abstract class APIRequest<T> {
 		uiThreadHandler.post(new Runnable(){
 			@Override
 			public void run(){
+				onRequestDone();
 				callback.onError(error);
 			}
 		});
+	}
+
+	protected void onRequestDone(){
+
 	}
 }

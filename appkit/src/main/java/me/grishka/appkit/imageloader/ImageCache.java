@@ -25,7 +25,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 import androidx.annotation.Nullable;
 import me.grishka.appkit.imageloader.disklrucache.DiskLruCache;
@@ -51,6 +54,8 @@ public class ImageCache{
 	private DiskLruCache diskCache=null;
 	private final Object diskCacheLock=new Object();
 	private Context appContext;
+	private final HashMap<String, Object> currentlyLoading=new HashMap<>();
+	private final LinkedList<Object> reusableLocks=new LinkedList<>();
 
 	private static ImageCache instance=null;
 	private static Parameters params=new Parameters();
@@ -218,8 +223,33 @@ public class ImageCache{
 	 */
 	public Drawable get(ImageLoaderRequest req, @Nullable String persistentPath, RequestWrapper w, ProgressCallback pc, boolean decode){
 		if(DEBUG) Log.d(TAG, "Get image: "+decode+" "+req);
+		String memKey=req.getMemoryCacheKey();
+		String diskKey=req.getDiskCacheKey();
+		boolean needWait=false;
+		final Object syncObj;
+		synchronized(currentlyLoading){
+			if(currentlyLoading.containsKey(diskKey)){
+				needWait=true;
+				syncObj=currentlyLoading.get(diskKey);
+			}else{
+				if(reusableLocks.isEmpty())
+					syncObj=new Object();
+				else
+					syncObj=reusableLocks.remove();
+				currentlyLoading.put(diskKey, syncObj);
+			}
+		}
+		if(needWait){
+			// wait while another thread completes this request
+			synchronized(syncObj){
+				while(currentlyLoading.containsKey(diskKey)){
+					try{
+						syncObj.wait();
+					}catch(InterruptedException ignore){}
+				}
+			}
+		}
 		try{
-			String memKey=req.getMemoryCacheKey();
 			Drawable bmp=cache.get(memKey);
 			if(bmp!=null){
 				return bmp;
@@ -244,8 +274,6 @@ public class ImageCache{
 					cache.put(memKey, bmp);
 				return bmp;
 			}
-
-			String diskKey=req.getDiskCacheKey();
 
 			if(persistentPath==null){
 				waitForDiskCache();
@@ -328,6 +356,16 @@ public class ImageCache{
 			return bmp;
 		}catch(Throwable x){
 			Log.w(TAG, req.toString(), x);
+		}finally{
+			if(!needWait){
+				synchronized(currentlyLoading){
+					currentlyLoading.remove(diskKey);
+				}
+				synchronized(syncObj){
+					syncObj.notifyAll();
+					reusableLocks.add(syncObj);
+				}
+			}
 		}
 		return null;
 	}

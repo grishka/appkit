@@ -6,6 +6,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 
@@ -16,7 +17,8 @@ import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 /**
  * Created by grishka on 17.12.14.
  */
-public class ViewImageLoader {
+public class ViewImageLoader{
+	private static final String TAG="ViewImageLoader";
 
 	private ViewImageLoader() {
 	}
@@ -32,14 +34,17 @@ public class ViewImageLoader {
 	}
 
 	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, boolean animate) {
-		load(target, placeholder, req, null, animate);
+		load(target, placeholder, req, null, animate, false);
 	}
 
-	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, @Nullable String localPath, boolean animate) {
-		LoadTask prevTask = (LoadTask) target.getView().getTag(R.id.tag_image_load_task);
-		if (prevTask != null) {
-			prevTask.cancel();
-			target.getView().setTag(R.id.tag_image_load_task, null);
+	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, @Nullable String localPath, boolean animate, boolean allowMultiple) {
+		View view=target.getView();
+		if(!allowMultiple){
+			LoadTask prevTask=(LoadTask) view.getTag(R.id.tag_image_load_task);
+			if(prevTask!=null){
+				prevTask.cancel();
+				target.getView().setTag(R.id.tag_image_load_task, null);
+			}
 		}
 
 		if (ImageCache.getInstance(target.getView().getContext()).isInTopCache(req)) {
@@ -53,13 +58,13 @@ public class ViewImageLoader {
 		task.req = req;
 		task.localPath=localPath;
 		task.animate = animate;
-		target.getView().setTag(R.id.tag_image_load_task, task);
+		view.setTag(R.id.tag_image_load_task, task);
 		if (ImageCache.getInstance(target.getView().getContext()).isInCache(req)) {
 			ImageLoaderThreadPool.enqueueCachedTask(task);
 		} else {
 			ImageLoaderThreadPool.enqueueTask(task);
 		}
-		target.getView().addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+		View.OnAttachStateChangeListener detachListener=new View.OnAttachStateChangeListener() {
 			@Override
 			public void onViewAttachedToWindow(View view) {
 
@@ -73,7 +78,9 @@ public class ViewImageLoader {
 					view.setTag(R.id.tag_image_load_task, null);
 				}
 			}
-		});
+		};
+		view.setTag(R.id.tag_detach_listener, detachListener);
+		view.addOnAttachStateChangeListener(detachListener);
 	}
 
 	public interface Target {
@@ -110,6 +117,7 @@ public class ViewImageLoader {
 		private String localPath;
 
 		public void cancel() {
+			Log.i(TAG, "Canceled "+req);
 			canceled = true;
 			ImageLoaderThreadPool.enqueueCancellation(()->{
 				try {
@@ -145,7 +153,12 @@ public class ViewImageLoader {
 					});
 				}
 			} catch (Exception x) {
-				//Log.w("appkit", "Error downloading image", x);
+				Log.w(TAG, "Error downloading image", x);
+			}finally{
+				View view=target.getView();
+				View.OnAttachStateChangeListener listener=(View.OnAttachStateChangeListener) view.getTag(R.id.tag_detach_listener);
+				view.setTag(R.id.tag_detach_listener, null);
+				view.removeOnAttachStateChangeListener(listener);
 			}
 		}
 	}

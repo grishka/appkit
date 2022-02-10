@@ -40,7 +40,6 @@ import me.grishka.appkit.utils.AutoAssignMaxRecycledViewPool;
  */
 public class UsableRecyclerView extends RecyclerView implements ObservableListImageLoaderAdapter, EmptyViewCapable{
 
-	private float lastTouchX, lastTouchY;
 	private ViewHolder clickingViewHolder;
 	private View highlightedView;
 	private Rect highlightBounds=new Rect();
@@ -123,9 +122,10 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 
 	@Override
 	public boolean onTouchEvent(MotionEvent e) {
+		if(highlight!=null){
+			highlight.setHotspot(e.getX(), e.getY());
+		}
 		if(trackingTouch || getScrollState()==SCROLL_STATE_IDLE){
-			lastTouchX=e.getX();
-			lastTouchY=e.getY();
 			if(e.getAction()==MotionEvent.ACTION_DOWN){
 				didClick=didHighlight=false;
 			}
@@ -188,7 +188,6 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 				}
 			}
 			highlight.setBounds(highlightBounds);
-			highlight.setHotspot(lastTouchX, lastTouchY);
 			highlight.draw(canvas);
 		}
 		if(!drawHighlightOnTop)
