@@ -321,11 +321,7 @@ public class ImageCache{
 			try{
 				editor=diskCache.edit(diskKey);
 				if(editor==null){
-					while((editor=diskCache.edit(diskKey))==null){
-						Thread.sleep(10);
-					}
-					editor.abort();
-					return get(req, null, w, pc, decode);
+					throw new IllegalStateException("Another thread has this file open -- should never happen");
 				}
 				boolean ok;
 				try(OutputStream out=new FileOutputStream(editor.getFile(0))){
@@ -363,6 +359,8 @@ public class ImageCache{
 				}
 				synchronized(syncObj){
 					syncObj.notifyAll();
+				}
+				synchronized(currentlyLoading){
 					reusableLocks.add(syncObj);
 				}
 			}

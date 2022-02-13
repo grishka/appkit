@@ -29,7 +29,7 @@ public abstract class LoaderFragment extends AppKitFragment implements SwipeRefr
 	protected View content;
 	protected ViewGroup contentView;
 	public boolean loaded;
-	protected boolean dataLoading;
+	public boolean dataLoading;
 	protected APIRequest currentRequest;
 
 	private BroadcastReceiver receiver=new BroadcastReceiver(){
