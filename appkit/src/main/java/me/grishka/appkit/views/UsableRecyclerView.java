@@ -94,6 +94,8 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private GestureDetector gestureDetector;
 	private boolean trackingTouch;
 	private boolean didHighlight, didClick;
+	private boolean includeMarginsInItemHitbox;
+	private Rect tmpRect=new Rect();
 
 	public UsableRecyclerView(Context context) {
 		super(context);
@@ -182,9 +184,14 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 				if(highlightBoundsProvider!=null){
 					highlightBoundsProvider.getSelectorBounds(highlightedView, highlightBounds);
 				}else{
-					int x=Math.round(highlightedView.getX());
-					int y=Math.round(highlightedView.getY());
-					highlightBounds.set(x, y, x+highlightedView.getWidth(), y+highlightedView.getHeight());
+					if(includeMarginsInItemHitbox){
+						getDecoratedBoundsWithMargins(highlightedView, highlightBounds);
+						highlightBounds.offset(Math.round(highlightedView.getTranslationX()), Math.round(highlightedView.getTranslationY()));
+					}else{
+						int x=Math.round(highlightedView.getX());
+						int y=Math.round(highlightedView.getY());
+						highlightBounds.set(x, y, x+highlightedView.getWidth(), y+highlightedView.getHeight());
+					}
 				}
 			}
 			highlight.setBounds(highlightBounds);
@@ -292,6 +299,14 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		imgLoaderObservers.remove(observer);
 	}
 
+	public boolean isIncludeMarginsInItemHitbox(){
+		return includeMarginsInItemHitbox;
+	}
+
+	public void setIncludeMarginsInItemHitbox(boolean includeMarginsInItemHitbox){
+		this.includeMarginsInItemHitbox=includeMarginsInItemHitbox;
+	}
+
 	private void endClick(){
 		if(clickingViewHolder!=null){
 			clickingViewHolder.itemView.setPressed(false);
@@ -309,6 +324,18 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 			clickingViewHolder.itemView.setPressed(true);
 			invalidate();
 		}
+	}
+
+	public View findChildViewUnderWithMargins(float x, float y){
+		int _x=Math.round(x), _y=Math.round(y);
+		for(int i=0;i<getChildCount();i++){
+			View child=getChildAt(i);
+			getDecoratedBoundsWithMargins(child, tmpRect);
+			tmpRect.offset(Math.round(child.getTranslationX()), Math.round(child.getTranslationY()));
+			if(tmpRect.contains(_x, _y))
+				return child;
+		}
+		return null;
 	}
 
 	public static abstract class Adapter<VH extends ViewHolder> extends RecyclerView.Adapter<VH>{
@@ -469,7 +496,11 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 
 		@Override
 		public boolean onDown(MotionEvent e){
-			View view=findChildViewUnder(e.getX(), e.getY());
+			View view;
+			if(includeMarginsInItemHitbox)
+				view=findChildViewUnderWithMargins(e.getX(), e.getY());
+			else
+				view=findChildViewUnder(e.getX(), e.getY());
 			if(view!=null){
 				ViewHolder holder=getChildViewHolder(view);
 				if(holder instanceof Clickable){
