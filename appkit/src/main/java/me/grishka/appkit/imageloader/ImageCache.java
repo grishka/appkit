@@ -6,10 +6,11 @@ import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
+import android.graphics.Matrix;
 import android.graphics.Movie;
-import android.graphics.drawable.AnimatedImageDrawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Looper;
@@ -26,7 +27,6 @@ import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -456,6 +456,15 @@ public class ImageCache{
 				}
 			}
 
+			if(uri!=null && drawable instanceof BitmapDrawable && Build.VERSION.SDK_INT>=Build.VERSION_CODES.N){
+				try(InputStream in=appContext.getContentResolver().openInputStream(uri)){
+					ExifInterface exif=new ExifInterface(in);
+					Bitmap rotated=applyExifRotation(((BitmapDrawable) drawable).getBitmap(), exif);
+					if(rotated!=null)
+						drawable=new BitmapDrawable(rotated);
+				}
+			}
+
 			for(ImageProcessingStep step:req.processingSteps)
 				drawable=step.processDrawable(drawable);
 
@@ -471,6 +480,27 @@ public class ImageCache{
 		}
 		Log.e(TAG, "WTF?!");
 		return null;
+	}
+
+	private Bitmap applyExifRotation(Bitmap bitmap, ExifInterface exif){
+		int orientation=exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+		int rotation;
+		switch(orientation){
+			case ExifInterface.ORIENTATION_ROTATE_90:
+				rotation=90;
+				break;
+			case ExifInterface.ORIENTATION_ROTATE_180:
+				rotation=180;
+				break;
+			case ExifInterface.ORIENTATION_ROTATE_270:
+				rotation=270;
+				break;
+			default:
+				return null;
+		}
+		Matrix matrix=new Matrix();
+		matrix.setRotate(rotation);
+		return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, false);
 	}
 
 	public boolean downloadFile(ImageLoaderRequest req, ImageCache.RequestWrapper w, ImageCache.ProgressCallback pc, OutputStream out){
