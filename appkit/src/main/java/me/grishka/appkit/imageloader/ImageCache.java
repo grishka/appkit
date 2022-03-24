@@ -452,16 +452,17 @@ public class ImageCache{
 						int dh=h;
 						bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
 					}
-					drawable=new BitmapDrawable(bmp);
-				}
-			}
 
-			if(uri!=null && drawable instanceof BitmapDrawable && Build.VERSION.SDK_INT>=Build.VERSION_CODES.N){
-				try(InputStream in=appContext.getContentResolver().openInputStream(uri)){
-					ExifInterface exif=new ExifInterface(in);
-					Bitmap rotated=applyExifRotation(((BitmapDrawable) drawable).getBitmap(), exif);
-					if(rotated!=null)
-						drawable=new BitmapDrawable(rotated);
+					if(uri!=null && Build.VERSION.SDK_INT>=Build.VERSION_CODES.N){
+						try(InputStream in=appContext.getContentResolver().openInputStream(uri)){
+							ExifInterface exif=new ExifInterface(in);
+							Bitmap rotated=applyExifRotation(bmp, exif);
+							if(rotated!=null)
+								bmp=rotated;
+						}
+					}
+
+					drawable=new BitmapDrawable(bmp);
 				}
 			}
 
