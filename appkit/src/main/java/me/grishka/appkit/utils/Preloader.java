@@ -95,7 +95,6 @@ public class Preloader<T> {
 			preloadOnReady=false;
 			callback.loadData(data.size(), itemsPerPage*2);
 		}
-		callback.updateList();
 		moreAvailable=more;
 
 		if(footerProgress==null){
