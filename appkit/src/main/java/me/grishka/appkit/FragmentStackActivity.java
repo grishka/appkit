@@ -165,6 +165,10 @@ public class FragmentStackActivity extends Activity{
 		Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
 		if(target==currentFragment){ // top-most, remove with animation and show whatever is underneath
 			final FrameLayout wrap=fragmentContainers.remove(fragmentContainers.size()-1);
+			if(fragmentContainers.isEmpty()){ // There's nothing underneath. Finish the entire activity then.
+				finish();
+				return;
+			}
 			final Fragment fragment=getFragmentManager().findFragmentById(wrap.getId());
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
 			Fragment prevFragment=getFragmentManager().findFragmentById(prevWrap.getId());
