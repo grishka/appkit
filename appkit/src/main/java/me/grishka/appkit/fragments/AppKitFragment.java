@@ -312,14 +312,15 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 		if(toolbar!=null) {
 			toolbar.setTitle(title);
 			updateToolbarMarquee();
-		}else if(getActivity()!=null && viewCreated){
-			if(getArguments()==null || !getArguments().getBoolean("_dialog"))
-				getActivity().setTitle(title);
 		}
 	}
 
 	protected void setTitle(int res){
 		setTitle(getString(res));
+	}
+
+	public CharSequence getTitle(){
+		return title;
 	}
 
 	protected void setSubtitle(CharSequence subtitle){

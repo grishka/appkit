@@ -4,9 +4,11 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.pm.PackageManager;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
@@ -147,6 +149,7 @@ public class FragmentStackActivity extends Activity{
 		}else{
 			applySystemBarColors(lightStatus, lightNav);
 		}
+		setTitle(getTitleForFragment(fragment));
 	}
 
 	public void showFragmentClearingBackStack(Fragment fragment){
@@ -210,6 +213,7 @@ public class FragmentStackActivity extends Activity{
 			});
 			InputMethodManager imm=(InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
 			imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+			setTitle(getTitleForFragment(prevFragment));
 		}else{
 			int id=target.getId();
 			for(FrameLayout wrap:fragmentContainers){
@@ -269,5 +273,18 @@ public class FragmentStackActivity extends Activity{
 			ids[i]=fragmentContainers.get(i).getId();
 		}
 		outState.putIntArray("appkit:fragmentContainerIDs", ids);
+	}
+
+	protected CharSequence getTitleForFragment(Fragment fragment){
+		if(fragment instanceof AppKitFragment){
+			return ((AppKitFragment) fragment).getTitle();
+		}
+		try{
+			int label=getPackageManager().getActivityInfo(getComponentName(), 0).labelRes;
+			if(label!=0)
+				return getString(label);
+			return getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(getPackageName(), 0));
+		}catch(PackageManager.NameNotFoundException ignored){}
+		return null;
 	}
 }
