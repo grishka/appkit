@@ -1,5 +1,9 @@
 package me.grishka.appkit;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
@@ -10,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewPropertyAnimator;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
@@ -29,6 +34,7 @@ public class FragmentStackActivity extends Activity{
 	protected FrameLayout content;
 	protected ArrayList<FrameLayout> fragmentContainers=new ArrayList<FrameLayout>();
 	protected WindowInsets lastInsets;
+	protected ArrayList<Animator> runningAnimators=new ArrayList<>();
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -111,11 +117,16 @@ public class FragmentStackActivity extends Activity{
 			lightStatus=lightNav=false;
 		}
 		if(fragmentContainers.size()>1){
-			wrap.setAlpha(0);
-			wrap.setTranslationX(V.dp(100));
-			wrap.animate().translationX(0).alpha(1).setDuration(300).setInterpolator(CubicBezierInterpolator.DEFAULT).withEndAction(new Runnable(){
+			AnimatorSet anim=new AnimatorSet();
+			anim.playTogether(
+					ObjectAnimator.ofFloat(wrap, View.ALPHA, 0f, 1f),
+					ObjectAnimator.ofFloat(wrap, View.TRANSLATION_X, V.dp(100), 0)
+			);
+			anim.setDuration(300);
+			anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+			anim.addListener(new AnimatorListenerAdapter(){
 				@Override
-				public void run(){
+				public void onAnimationEnd(Animator animation){
 					for(int i=0; i<fragmentContainers.size()-1; i++){
 						View container=fragmentContainers.get(i);
 						if(container.getVisibility()==View.VISIBLE){
@@ -127,8 +138,11 @@ public class FragmentStackActivity extends Activity{
 					}
 					if(fragment instanceof AppKitFragment)
 						((AppKitFragment) fragment).onTransitionFinished();
+					runningAnimators.remove(animation);
 				}
-			}).start();
+			});
+			runningAnimators.add(anim);
+			anim.start();
 			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
 				private float prevAlpha=wrap.getAlpha();
 				@Override
@@ -186,14 +200,25 @@ public class FragmentStackActivity extends Activity{
 			}else{
 				lightStatus=lightNav=false;
 			}
-			wrap.animate().translationX(V.dp(100)).alpha(0).setDuration(200).setInterpolator(CubicBezierInterpolator.DEFAULT).withEndAction(new Runnable(){
+			AnimatorSet anim=new AnimatorSet();
+			// TODO customizable animations
+			anim.playTogether(
+					ObjectAnimator.ofFloat(wrap, View.TRANSLATION_X, V.dp(100)),
+					ObjectAnimator.ofFloat(wrap, View.ALPHA, 0)
+			);
+			anim.setDuration(200);
+			anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+			anim.addListener(new AnimatorListenerAdapter(){
 				@Override
-				public void run(){
+				public void onAnimationEnd(Animator animation){
 					getFragmentManager().beginTransaction().remove(fragment).commit();
 					getFragmentManager().executePendingTransactions();
 					content.removeView(wrap);
+					runningAnimators.remove(animation);
 				}
-			}).start();
+			});
+			runningAnimators.add(anim);
+			anim.start();
 			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
 				private float prevAlpha=wrap.getAlpha();
 				@Override
@@ -267,6 +292,12 @@ public class FragmentStackActivity extends Activity{
 
 	@Override
 	protected void onSaveInstanceState(@NonNull Bundle outState){
+		if(!runningAnimators.isEmpty()){
+			for(Animator anim:runningAnimators){
+				anim.end();
+			}
+			runningAnimators.clear();
+		}
 		super.onSaveInstanceState(outState);
 		int[] ids=new int[fragmentContainers.size()];
 		for(int i=0;i<fragmentContainers.size();i++){
