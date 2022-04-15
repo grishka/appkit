@@ -276,7 +276,6 @@ public class ListImageLoader {
 					mainThreadHandler.post(new Runnable() {
 						@Override
 						public void run() {
-							reuseTask(RunnableTask.this);
 							if(set && !canceled){
 								synchronized(ListImageLoader.this){
 									loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
@@ -284,12 +283,14 @@ public class ListImageLoader {
 								if(req.equals(adapter.getImageRequest(item, image)))
 									adapter.imageLoaded(item, image, bmp);
 							}
+							if(DEBUG) Log.v(TAG, "Completed [UI thread]: "+this);
+							reuseTask(RunnableTask.this);
 						}
 					});
 				}else{
+					if(DEBUG) Log.v(TAG, "Completed: "+this);
 					reuseTask(this);
 				}
-				if(DEBUG) Log.v(TAG, "Completed: "+this);
 			}catch(Exception x){
 				Log.w(TAG, x);
 			}
