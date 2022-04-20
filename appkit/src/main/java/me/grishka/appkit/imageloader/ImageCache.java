@@ -119,6 +119,17 @@ public class ImageCache{
 	public LruCache<String, Drawable> getLruCache(){
 		return cache;
 	}
+
+	public DiskLruCache getDiskCache(){
+		waitForDiskCache();
+		return diskCache;
+	}
+
+	public File getFile(ImageLoaderRequest req) throws IOException{
+		waitForDiskCache();
+		DiskLruCache.Value val=diskCache.get(req.getDiskCacheKey());
+		return val!=null ? val.getFile(0) : null;
+	}
 	
 	public void remove(ImageLoaderRequest req){
 		cache.remove(req.getMemoryCacheKey());
