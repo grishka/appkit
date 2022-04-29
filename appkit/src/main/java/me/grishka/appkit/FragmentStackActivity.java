@@ -13,6 +13,8 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewPropertyAnimator;
 import android.view.ViewTreeObserver;
@@ -32,9 +34,10 @@ import me.grishka.appkit.utils.V;
 
 public class FragmentStackActivity extends Activity{
 	protected FrameLayout content;
-	protected ArrayList<FrameLayout> fragmentContainers=new ArrayList<FrameLayout>();
+	protected ArrayList<FrameLayout> fragmentContainers=new ArrayList<>();
 	protected WindowInsets lastInsets;
 	protected ArrayList<Animator> runningAnimators=new ArrayList<>();
+	protected boolean blockInputEvents; // during fragment transitions
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -139,8 +142,12 @@ public class FragmentStackActivity extends Activity{
 					if(fragment instanceof AppKitFragment)
 						((AppKitFragment) fragment).onTransitionFinished();
 					runningAnimators.remove(animation);
+					if(runningAnimators.isEmpty())
+						onAllFragmentTransitionsDone();
 				}
 			});
+			if(runningAnimators.isEmpty())
+				onFragmentTransitionStart();
 			runningAnimators.add(anim);
 			anim.start();
 			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
@@ -215,8 +222,12 @@ public class FragmentStackActivity extends Activity{
 					getFragmentManager().executePendingTransactions();
 					content.removeView(wrap);
 					runningAnimators.remove(animation);
+					if(runningAnimators.isEmpty())
+						onAllFragmentTransitionsDone();
 				}
 			});
+			if(runningAnimators.isEmpty())
+				onFragmentTransitionStart();
 			runningAnimators.add(anim);
 			anim.start();
 			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
@@ -268,6 +279,35 @@ public class FragmentStackActivity extends Activity{
 		super.onBackPressed();
 	}
 
+	@Override
+	public boolean dispatchKeyEvent(KeyEvent event){
+		if(blockInputEvents && event.getKeyCode()!=KeyEvent.KEYCODE_BACK){
+			return true;
+		}
+		return super.dispatchKeyEvent(event);
+	}
+
+	@Override
+	public boolean dispatchTouchEvent(MotionEvent ev){
+		if(blockInputEvents)
+			return true;
+		return super.dispatchTouchEvent(ev);
+	}
+
+	@Override
+	public boolean dispatchTrackballEvent(MotionEvent ev){
+		if(blockInputEvents)
+			return true;
+		return super.dispatchTrackballEvent(ev);
+	}
+
+	@Override
+	public boolean dispatchGenericMotionEvent(MotionEvent ev){
+		if(blockInputEvents)
+			return true;
+		return super.dispatchGenericMotionEvent(ev);
+	}
+
 	protected void reapplyWindowInsets(){
 		FragmentManager mgr=getFragmentManager();
 		for(int i=0;i<content.getChildCount();i++){
@@ -317,5 +357,13 @@ public class FragmentStackActivity extends Activity{
 			return getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(getPackageName(), 0));
 		}catch(PackageManager.NameNotFoundException ignored){}
 		return null;
+	}
+
+	protected void onFragmentTransitionStart(){
+		blockInputEvents=true;
+	}
+
+	protected void onAllFragmentTransitionsDone(){
+		blockInputEvents=false;
 	}
 }

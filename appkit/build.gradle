@@ -23,4 +23,4 @@ dependencies {
 	implementation 'me.grishka.litex:collection:1.1.0'
 }
 
-version = '1.2.2'
+version = '1.2.3'
