@@ -8,8 +8,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRecyclerAdapter.ViewViewHolder>{
 
-	private View view;
-	private int id;
+	protected final View view;
+	protected final int id;
 
 	public SingleViewRecyclerAdapter(View view){
 		this.view=view;
@@ -37,7 +37,7 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 		return id;
 	}
 
-	public class ViewViewHolder extends RecyclerView.ViewHolder{
+	public static class ViewViewHolder extends RecyclerView.ViewHolder{
 		public ViewViewHolder(@NonNull View itemView){
 			super(itemView);
 		}

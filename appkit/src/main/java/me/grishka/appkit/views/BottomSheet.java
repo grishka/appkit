@@ -11,7 +11,9 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
+import android.util.Property;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -32,6 +34,17 @@ public class BottomSheet extends Dialog{
 	private DisplayMetrics displayMetrics;
 	private boolean dismissed;
 	private Drawable navigationBarBackground;
+	private static final Property<View, Float> DUMMY_INVALIDATOR_PROPERTY=new Property<View, Float>(Float.class, "dummy"){
+		@Override
+		public Float get(View object){
+			return 0f;
+		}
+
+		@Override
+		public void set(View object, Float value){
+			object.invalidate();
+		}
+	};
 
 	public BottomSheet(@NonNull Context context){
 		super(context);
@@ -69,8 +82,9 @@ public class BottomSheet extends Dialog{
 		getWindow().setDimAmount(0);
 		AnimatorSet set=new AnimatorSet();
 		set.playTogether(
-				ObjectAnimator.ofFloat(content, "translationY", height),
-				ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0.5f, 0)
+				ObjectAnimator.ofFloat(content, View.TRANSLATION_Y, height),
+				ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0.5f, 0),
+				ObjectAnimator.ofFloat(container, DUMMY_INVALIDATOR_PROPERTY, 1f, 0f)
 		);
 		set.setDuration(Math.max(60, (int) (180 * (height - content.getTranslationY()) / (float) height)));
 		set.setInterpolator(CubicBezierInterpolator.EASE_OUT);
@@ -93,8 +107,9 @@ public class BottomSheet extends Dialog{
 				content.setTranslationY(content.getHeight());
 				AnimatorSet set=new AnimatorSet();
 				set.playTogether(
-						ObjectAnimator.ofFloat(content, "translationY", 0),
-						ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0, 0.5f)
+						ObjectAnimator.ofFloat(content, View.TRANSLATION_Y, 0),
+						ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0, 0.5f),
+						ObjectAnimator.ofFloat(container, DUMMY_INVALIDATOR_PROPERTY, 1f, 0f)
 				);
 				set.setDuration(300);
 				set.setInterpolator(CubicBezierInterpolator.DEFAULT);
@@ -106,15 +121,18 @@ public class BottomSheet extends Dialog{
 
 	public void setNavigationBarBackground(Drawable drawable, boolean useLightNavbar){
 		navigationBarBackground=drawable;
-		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O && useLightNavbar){
 			getWindow().getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
 		}
 	}
+
+	protected void onWindowInsetsUpdated(WindowInsets insets){}
 
 	private class ContainerView extends FrameLayout{
 
 		private float currentTranslationY=0;
 		private VelocityTracker velocityTracker;
+		private boolean isGestureNavigation;
 
 		public ContainerView(Context context) {
 			super(context);
@@ -145,6 +163,7 @@ public class BottomSheet extends Dialog{
 		public void onNestedScroll(View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed){
 			currentTranslationY-=dyUnconsumed;
 			content.setTranslationY(Math.max(0, currentTranslationY));
+			invalidate();
 		}
 
 		@Override
@@ -158,6 +177,7 @@ public class BottomSheet extends Dialog{
 					currentTranslationY=0;
 				}
 				content.setTranslationY(Math.max(0, currentTranslationY));
+				invalidate();
 			}
 		}
 
@@ -175,12 +195,23 @@ public class BottomSheet extends Dialog{
 		public boolean dispatchTouchEvent(MotionEvent ev){
 			if(velocityTracker!=null)
 				velocityTracker.addMovement(ev);
+			if(dismissed)
+				return true;
 			return super.dispatchTouchEvent(ev);
+		}
+
+		@Override
+		public boolean dispatchKeyEvent(KeyEvent event){
+			if(dismissed)
+				return true;
+			return super.dispatchKeyEvent(event);
 		}
 
 		@Override
 		public WindowInsets onApplyWindowInsets(WindowInsets insets){
 			setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+			onWindowInsetsUpdated(insets);
+			isGestureNavigation=Build.VERSION.SDK_INT>=29 && insets.getTappableElementInsets().bottom==0 && insets.getSystemWindowInsetBottom()>0;
 			return insets;
 		}
 
@@ -190,7 +221,7 @@ public class BottomSheet extends Dialog{
 				dismiss();
 			} else {
 				final AnimatorSet currentAnimation = new AnimatorSet();
-				currentAnimation.playTogether(ObjectAnimator.ofFloat(content, "translationY", 0));
+				currentAnimation.playTogether(ObjectAnimator.ofFloat(content, View.TRANSLATION_Y, 0), ObjectAnimator.ofFloat(this, DUMMY_INVALIDATOR_PROPERTY, 1f, 0f));
 				currentAnimation.setDuration((int) (150 * (currentTranslationY / getPixelsInCM(0.8f, false))));
 				currentAnimation.setInterpolator(CubicBezierInterpolator.EASE_OUT);
 				currentTranslationY=0;
@@ -202,8 +233,14 @@ public class BottomSheet extends Dialog{
 		protected void dispatchDraw(Canvas canvas){
 			super.dispatchDraw(canvas);
 			if(navigationBarBackground!=null && getPaddingBottom()>0){
+				if(isGestureNavigation){
+					canvas.save();
+					canvas.translate(0, content.getTranslationY());
+				}
 				navigationBarBackground.setBounds(0, getHeight()-getPaddingBottom(), getWidth(), getHeight());
 				navigationBarBackground.draw(canvas);
+				if(isGestureNavigation)
+					canvas.restore();
 			}
 		}
 
