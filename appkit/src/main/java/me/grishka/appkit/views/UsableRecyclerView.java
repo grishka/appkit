@@ -357,33 +357,41 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	/**
 	 * Implement this in your ViewHolder if you want to handle clicks on that item.
 	 */
-	public static interface Clickable{
+	public interface Clickable{
 		/**
 		 * Called when this item has been clicked and the click is confirmed (after the ACTION_UP touch event).
 		 */
-		public void onClick();
+		void onClick();
+
+		default void onClick(float x, float y){
+			onClick();
+		}
 	}
 
 	/**
 	 * An extended version of Clickable which allows disabling particular items making them not clickable and not highlightable when touched.
 	 */
-	public static interface DisableableClickable extends Clickable{
+	public interface DisableableClickable extends Clickable{
 		/**
 		 * Called on ACTION_DOWN to determine if this item is clickable at all.
 		 * @return Whether the item is clickable.
 		 */
-		public boolean isEnabled();
+		boolean isEnabled();
 	}
 
 	/**
 	 * Implement this in your ViewHolder if you want to handle long clicks on this item.
 	 */
-	public static interface LongClickable{
+	public interface LongClickable{
 		/**
 		 * Called when a long click on this item is confirmed.
 		 * @return true if you've handled the long click so a haptic feedback will be performed and the highlight will disappear.
 		 */
-		public boolean onLongClick();
+		boolean onLongClick();
+
+		default boolean onLongClick(float x, float y){
+			return onLongClick();
+		}
 	}
 
 	private class FooterRecyclerAdapter extends RecyclerView.Adapter<ViewHolder> {
@@ -522,7 +530,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 			if(clickingViewHolder!=null){
 				didClick=true;
 				playSoundEffect(SoundEffectConstants.CLICK);
-				((Clickable)clickingViewHolder).onClick();
+				((Clickable)clickingViewHolder).onClick(e.getX()-clickingViewHolder.itemView.getX(), e.getY()-clickingViewHolder.itemView.getY());
 			}
 			return true;
 		}
@@ -539,7 +547,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 
 		@Override
 		public void onLongPress(MotionEvent e){
-			if(clickingViewHolder instanceof LongClickable && ((LongClickable) clickingViewHolder).onLongClick()){
+			if(clickingViewHolder instanceof LongClickable && ((LongClickable) clickingViewHolder).onLongClick(e.getX()-clickingViewHolder.itemView.getX(), e.getY()-clickingViewHolder.itemView.getY())){
 				performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
 				endClick();
 			}
