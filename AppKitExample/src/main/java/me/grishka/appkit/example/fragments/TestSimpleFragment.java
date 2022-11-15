@@ -26,7 +26,7 @@ public class TestSimpleFragment extends ToolbarFragment{
 		view.findViewById(R.id.loader).setOnClickListener(this::onClick);
 		view.findViewById(R.id.spinner).setOnClickListener(this::onClick);
 		view.findViewById(R.id.gif).setOnClickListener(this::onClick);
-
+		view.findViewById(R.id.img_loader).setOnClickListener(this::onClick);
 
 		return view;
 	}
@@ -41,6 +41,7 @@ public class TestSimpleFragment extends ToolbarFragment{
 			case R.id.loader -> Nav.go(getActivity(), ExampleLoaderFragment.class, new Bundle());
 			case R.id.spinner -> Nav.go(getActivity(), SpinnerNavigationFragment.class, new Bundle());
 			case R.id.gif -> Nav.go(getActivity(), AnimatedGifExampleFragment.class, new Bundle());
+			case R.id.img_loader -> Nav.go(getActivity(), ListImageLoaderUpdateTestFragment.class, new Bundle());
 		}
 	}
 }

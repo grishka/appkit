@@ -36,4 +36,11 @@
 		android:textAllCaps="false"
 		android:text="Animated GIF"/>
 
+	<Button
+		android:id="@+id/img_loader"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:textAllCaps="false"
+		android:text="Image loader test"/>
+
 </LinearLayout>

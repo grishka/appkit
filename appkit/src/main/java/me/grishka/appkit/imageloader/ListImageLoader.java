@@ -1,12 +1,9 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.Iterator;
@@ -47,6 +44,8 @@ public class ListImageLoader {
 	}
 	
 	public void loadRange(int start, int end, Context context, boolean force){
+		if(start>end)
+			throw new IllegalArgumentException("start="+start+" > end="+end);
 		if(adapter==null) return;
 		try{
 			start=Math.max(0, start);
@@ -240,6 +239,7 @@ public class ListImageLoader {
 		public Context context;
 
 		public void cancel(){
+			if(DEBUG) Log.i(TAG, "Cancel: "+this);
 			canceled=true;
 			ImageLoaderThreadPool.enqueueCancellation(new Runnable() {
 				@Override
@@ -280,7 +280,8 @@ public class ListImageLoader {
 								synchronized(ListImageLoader.this){
 									loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
 								}
-								if(req.equals(adapter.getImageRequest(item, image)))
+								// TODO handle partial adapter updates better
+								if(item<adapter.getCount() && image<adapter.getImageCountForItem(item) && req.equals(adapter.getImageRequest(item, image)))
 									adapter.imageLoaded(item, image, bmp);
 							}
 							if(DEBUG) Log.v(TAG, "Completed [UI thread]: "+this);

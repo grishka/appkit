@@ -164,6 +164,10 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		list.getView().postDelayed(r, 100);
 	}
 
+	public void forceUpdateImages(){
+		doUpdateImages();
+	}
+
 	private void reloadRange(int position, int count){
 		int posMin=list.getFirstVisiblePosition()-Math.round(list.getVisibleItemCount()*prefetchScreens);
 		int posMax=list.getLastVisiblePosition()+Math.round(list.getVisibleItemCount()*prefetchScreens);

@@ -540,7 +540,9 @@ public class ImageCache{
 		try{
 			waitForDiskCache();
 			diskCache.delete();
-		}catch(Exception x){}
+		}catch(Exception x){
+			Log.w(TAG, x);
+		}
 		open();
 	}
 	
