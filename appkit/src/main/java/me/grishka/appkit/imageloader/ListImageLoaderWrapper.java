@@ -253,13 +253,16 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 					//imgLoader.setIsScrolling(true);
 					imgLoader.setIsScrolling(false);
 					wasFastScrolling=false;
-					imgLoader.loadRange(list.getFirstVisiblePosition()-getNumHeaders(), list.getLastVisiblePosition(), context);
-					if(lastScrollFwd){
-						imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-						imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-					}else{
-						imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-						imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
+					int lastVisiblePos=list.getLastVisiblePosition();
+					if(lastVisiblePos>=0){
+						imgLoader.loadRange(list.getFirstVisiblePosition()-getNumHeaders(), lastVisiblePos, context);
+						if(lastScrollFwd){
+							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
+							imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+						}else{
+							imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
+						}
 					}
 				}else{
 					if(prevVisFirst>viStart){ // top
