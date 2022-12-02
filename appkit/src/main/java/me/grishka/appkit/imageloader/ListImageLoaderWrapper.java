@@ -329,6 +329,8 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 			imgLoader.setIsScrolling(false);
 			//Log.w(TAG, "Scroll state idle, loading");
 			wasFastScrolling=false;
+			if(viCount<=0)
+				return;
 			imgLoader.preparePartialCancel();
 			imgLoader.loadRange(viStart-getNumHeaders(), viStart+viCount, context);
 			if(lastScrollFwd){
