@@ -22,8 +22,7 @@ public class Nav{
 				((FragmentStackActivity) activity).showFragment(fragment);
 			}
 		}catch(Exception x){
-			Log.w("Nav", x);
-			Toast.makeText(activity, "Error navigating to "+fragmentClass.getName(), Toast.LENGTH_LONG).show();
+			throw new RuntimeException(x);
 		}
 	}
 
@@ -37,8 +36,7 @@ public class Nav{
 				((FragmentStackActivity) activity).showFragmentClearingBackStack(fragment);
 			}
 		}catch(Exception x){
-			Log.w("Nav", x);
-			Toast.makeText(activity, "Error navigating to "+fragmentClass.getName(), Toast.LENGTH_LONG).show();
+			throw new RuntimeException(x);
 		}
 	}
 
@@ -59,8 +57,7 @@ public class Nav{
 				((FragmentStackActivity) activity).showFragment(fragment);
 			}
 		}catch(Exception x){
-			Log.w("Nav", x);
-			Toast.makeText(activity, "Error navigating to "+fragmentClass.getName(), Toast.LENGTH_LONG).show();
+			throw new RuntimeException(x);
 		}
 	}
 

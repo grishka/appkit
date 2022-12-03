@@ -97,7 +97,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 		if(toolbarTitleView!=null){
 			toolbarTitleView.setFadingEdgeLength(V.dp(10));
 			toolbarTitleView.setHorizontalFadingEdgeEnabled(true);
-			toolbarTitleView.setMarqueeRepeatLimit(2);
+			toolbarTitleView.setMarqueeRepeatLimit(1);
 			if(titleMarquee){
 				toolbarTitleView.setEllipsize(TextUtils.TruncateAt.MARQUEE);
 				toolbarTitleView.setSelected(true);
@@ -109,7 +109,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 		if(toolbarSubtitleView!=null){
 			toolbarSubtitleView.setFadingEdgeLength(V.dp(10));
 			toolbarSubtitleView.setHorizontalFadingEdgeEnabled(true);
-			toolbarSubtitleView.setMarqueeRepeatLimit(2);
+			toolbarSubtitleView.setMarqueeRepeatLimit(1);
 			if(subtitleMarquee){
 				toolbarSubtitleView.setEllipsize(TextUtils.TruncateAt.MARQUEE);
 				toolbarSubtitleView.setSelected(true);
@@ -182,7 +182,11 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 			toolbar.setTitle(null);
 			toolbar.setSubtitle(null);
 		}
+
+		onUpdateToolbar();
 	}
+
+	protected void onUpdateToolbar(){}
 
 	@Override
 	public void onViewCreated(View view, Bundle savedInstanceState) {
