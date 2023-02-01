@@ -41,6 +41,17 @@ public class V{
 			throw new IllegalStateException("Application context is not set, call V.setApplicationContext() before using these methods");
 		return Math.round(dp*appContext.getResources().getDisplayMetrics().density);
 	}
+	
+	/**
+	 * Scale the input value according to the device's scaled display density
+	 * @param dp Input value in scale-independent pixels (sp)
+	 * @return Scaled value in physical pixels (px)
+	 */
+	public static int sp(float sp){
+		if(appContext==null)
+			throw new IllegalStateException("Application context is not set, call V.setApplicationContext() before using these methods");
+		return Math.round(sp*appContext.getResources().getDisplayMetrics().scaledDensity);
+	}
 
 	/**
 	 * Change a View's visibility with a fade-in/-out animation. If that doesn't change the actual visibility, (INVISIBLE -> GONE or VISIBLE -> VISIBLE) does nothing.
