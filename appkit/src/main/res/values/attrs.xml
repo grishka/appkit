@@ -7,4 +7,7 @@
 	<attr name="appkitDefaultErrorText" format="string|reference"/>
 	<attr name="appkitRetryButtonText" format="string|reference"/>
 	<attr name="appkitBackDrawable" format="reference"/>
+	<attr name="appkitToolbarElevation" format="dimension"/>
+	<attr name="appkitToolbarBackground" format="color|reference"/>
+	<attr name="actionBarIconTint" format="color|reference"/>
 </resources>

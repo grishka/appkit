@@ -1,11 +1,9 @@
 package me.grishka.appkit.imageloader;
 
-import android.graphics.Bitmap;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
@@ -35,6 +33,10 @@ public class ViewImageLoader{
 
 	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, boolean animate) {
 		load(target, placeholder, req, null, animate, false);
+	}
+
+	public static void loadWithoutAnimation(ImageView view, Drawable placeholder, ImageLoaderRequest req){
+		load(new ImageViewTarget(view), placeholder, req, false);
 	}
 
 	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, @Nullable String localPath, boolean animate, boolean allowMultiple) {
@@ -88,7 +90,7 @@ public class ViewImageLoader{
 		View getView();
 	}
 
-	private static class ImageViewTarget implements Target {
+	public static class ImageViewTarget implements Target {
 
 		private ImageView view;
 

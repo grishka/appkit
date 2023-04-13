@@ -254,6 +254,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private void updateEmptyViewVisibility(){
 		if(emptyView!=null){
 			emptyView.setVisibility(isEmpty() ? VISIBLE : GONE);
+			setVisibility(isEmpty() ? INVISIBLE : VISIBLE);
 		}
 	}
 

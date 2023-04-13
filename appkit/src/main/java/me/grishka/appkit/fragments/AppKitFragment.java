@@ -7,12 +7,14 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -256,8 +258,24 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	private void invalidateToolbarMenu(){
 		toolbar.getMenu().clear();
 		if(hasOptionsMenu){
-			onCreateOptionsMenu(toolbar.getMenu(), new MenuInflater(getActivity()));
+			Menu menu=toolbar.getMenu();
+			onCreateOptionsMenu(menu, new MenuInflater(getActivity()));
+			if(wantsToolbarMenuIconsTinted()){
+				TypedArray ta=toolbar.getContext().obtainStyledAttributes(new int[]{R.attr.actionBarIconTint});
+				int tintColor=ta.getColor(0, 0xFF000000);
+				ta.recycle();
+				for(int i=0;i<menu.size();i++){
+					Drawable icon=menu.getItem(i).getIcon();
+					if(icon!=null && icon.getColorFilter()==null){
+						icon.setColorFilter(tintColor, PorterDuff.Mode.SRC_IN);
+					}
+				}
+			}
 		}
+	}
+
+	protected boolean wantsToolbarMenuIconsTinted(){
+		return true;
 	}
 
 	protected Toolbar getToolbar(){

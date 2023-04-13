@@ -19,7 +19,7 @@ import me.grishka.appkit.R;
 public class V{
 
 	private static Context appContext;
-	private static HashMap<View, ObjectAnimator> visibilityAnims=new HashMap<View, ObjectAnimator>();
+	private static HashMap<View, ObjectAnimator> visibilityAnims=new HashMap<>();
 
 	/**
 	 * This must be called before calling any other methods from this class.
@@ -48,45 +48,52 @@ public class V{
 	 * @param visibility The new visibility constant, either View.VISIBLE, View.INVISIBLE, or View.GONE
 	 */
 	public static void setVisibilityAnimated(final View view, final int visibility){
+		setVisibilityAnimated(view, visibility, null);
+	}
+
+	/**
+	 * Change a View's visibility with a fade-in/-out animation. If that doesn't change the actual visibility, (INVISIBLE -> GONE or VISIBLE -> VISIBLE) does nothing.
+	 * @param view The target view
+	 * @param visibility The new visibility constant, either View.VISIBLE, View.INVISIBLE, or View.GONE
+	 * @param onDone A runnable to run when the animation finishes
+	 */
+	public static void setVisibilityAnimated(final View view, final int visibility, Runnable onDone){
 		if (view == null) {
 			return;
 		}
 		boolean vis=visibility==View.VISIBLE;
 		boolean viewVis=view.getVisibility()==View.VISIBLE && view.getTag(R.id.tag_visibility_anim)==null;
-		if(vis==viewVis) return;
+		if(vis==viewVis){
+			if(onDone!=null)
+				onDone.run();
+			return;
+		}
 		if(visibilityAnims.containsKey(view)){
 			visibilityAnims.get(view).cancel();
 			visibilityAnims.remove(view);
 		}
+		ObjectAnimator anim;
 		if(vis){
-			ObjectAnimator anim=ObjectAnimator.ofFloat(view, "alpha", view.getAlpha()<1 ? view.getAlpha() : 0, 1);
+			anim=ObjectAnimator.ofFloat(view, View.ALPHA, view.getAlpha()<1 ? view.getAlpha() : 0, 1);
 			anim.addListener(new AnimatorListenerAdapter(){
 				public void onAnimationStart(Animator anim){
 					view.setVisibility(visibility);
-					//Log.i("appkit", "Anim start "+anim);
 				}
 				public void onAnimationEnd(Animator anim){
 					view.setVisibility(visibility);
-					//Log.i("appkit", "Anim end "+anim);
 					visibilityAnims.remove(view);
-				}
-				public void onAnimationCancel(Animator anim){
-					view.setVisibility(visibility);
-					//Log.i("appkit", "Anim cancel "+anim);
+					if(onDone!=null)
+						onDone.run();
 				}
 			});
-			anim.setDuration(300);
-			visibilityAnims.put(view, anim);
-			anim.start();
 		}else{
-			ObjectAnimator anim=ObjectAnimator.ofFloat(view, "alpha", 0);
+			anim=ObjectAnimator.ofFloat(view, View.ALPHA, 0);
 			anim.addListener(new AnimatorListenerAdapter(){
 				boolean canceled=false;
-				public void onAnimationStart(Animator anim){
-					//Log.i("appkit", "Anim start "+anim);
-				}
 				public void onAnimationEnd(Animator anim){
-					//Log.i("appkit", "Anim end "+anim);
+					if(onDone!=null)
+						onDone.run();
+
 					view.setTag(R.id.tag_visibility_anim, null);
 					visibilityAnims.remove(view);
 					if(canceled) return;
@@ -94,15 +101,15 @@ public class V{
 					view.setAlpha(1);
 				}
 				public void onAnimationCancel(Animator anim){
-					//Log.i("appkit", "Anim cancel "+anim);
 					canceled=true;
 				}
 			});
 			view.setTag(R.id.tag_visibility_anim, true);
-			anim.setDuration(300);
-			visibilityAnims.put(view, anim);
-			anim.start();
 		}
+		anim.setDuration(300);
+		anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+		visibilityAnims.put(view, anim);
+		anim.start();
 	}
 
 	public static void cancelVisibilityAnimation(final View view){

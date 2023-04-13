@@ -8,8 +8,8 @@
 	android:layout_height="?android:attr/actionBarSize"
 	android:theme="?android:attr/actionBarTheme"
 	android:popupTheme="?android:attr/actionBarPopupTheme"
-	android:background="?android:attr/colorPrimary"
+	android:background="?appkitToolbarBackground"
 	android:titleTextAppearance="?android:attr/titleTextAppearance"
 	android:subtitleTextAppearance="?android:attr/subtitleTextAppearance"
-	android:elevation="3dip"
+	android:elevation="?appkitToolbarElevation"
 	tools:showIn="@layout/loader_fragment"/>

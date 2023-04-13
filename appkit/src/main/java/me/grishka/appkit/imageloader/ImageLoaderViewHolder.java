@@ -1,6 +1,5 @@
 package me.grishka.appkit.imageloader;
 
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 
 /**
@@ -8,5 +7,7 @@ import android.graphics.drawable.Drawable;
  */
 public interface ImageLoaderViewHolder {
 	void setImage(int index, Drawable image);
-	void clearImage(int index);
+	default void clearImage(int index){
+		setImage(index, null);
+	}
 }
