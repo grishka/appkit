@@ -31,6 +31,7 @@ import android.widget.Toolbar;
 
 import java.util.List;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.LayoutRes;
 import me.grishka.appkit.R;
 import me.grishka.appkit.utils.StubListAdapter;
@@ -62,7 +63,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	 */
 	public static final String EXTRA_IS_TAB="__is_tab";
 
-	public boolean hasNavigationDrawer(){
+	public boolean wantsCustomNavigationIcon(){
 		return false;
 	}
 
@@ -155,7 +156,13 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 				}
 			});
 		}
-		if(canGoBack()){
+		if(wantsCustomNavigationIcon()){
+			Drawable d=getNavigationIconDrawable().mutate();
+			TypedArray ta=toolbar.getContext().obtainStyledAttributes(new int[]{android.R.attr.textColorSecondary});
+			d.setTint(ta.getColor(0, 0xFF000000));
+			ta.recycle();
+			toolbar.setNavigationIcon(d);
+		}else if(canGoBack()){
 			int[] attrs={R.attr.appkitBackDrawable, android.R.attr.textColorSecondary};
 			TypedArray ta=toolbar.getContext().obtainStyledAttributes(attrs);
 			Drawable d=ta.getDrawable(0);
@@ -165,12 +172,6 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 				d=getResources().getDrawable(R.drawable.ic_arrow_back);
 			d=d.mutate();
 			d.setTint(tintColor);
-			toolbar.setNavigationIcon(d);
-		}else if(hasNavigationDrawer()){
-			Drawable d=getResources().getDrawable(R.drawable.ic_menu).mutate();
-			TypedArray ta=toolbar.getContext().obtainStyledAttributes(new int[]{android.R.attr.textColorSecondary});
-			d.setTint(ta.getColor(0, 0xFF000000));
-			ta.recycle();
 			toolbar.setNavigationIcon(d);
 		}
 		toolbar.setNavigationOnClickListener(new View.OnClickListener() {
@@ -189,6 +190,15 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	}
 
 	protected void onUpdateToolbar(){}
+
+	protected Drawable getNavigationIconDrawable(){
+		return getResources().getDrawable(getNavigationIconDrawableResource(), getActivity().getTheme());
+	}
+
+	@DrawableRes
+	protected int getNavigationIconDrawableResource(){
+		return R.drawable.ic_arrow_back;
+	}
 
 	@Override
 	public void onViewCreated(View view, Bundle savedInstanceState) {
@@ -262,12 +272,21 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 			onCreateOptionsMenu(menu, new MenuInflater(getActivity()));
 			if(wantsToolbarMenuIconsTinted()){
 				TypedArray ta=toolbar.getContext().obtainStyledAttributes(new int[]{R.attr.actionBarIconTint});
-				int tintColor=ta.getColor(0, 0xFF000000);
+				ColorStateList tintColor=ta.getColorStateList(0);
 				ta.recycle();
+				if(tintColor==null)
+					return;
 				for(int i=0;i<menu.size();i++){
-					Drawable icon=menu.getItem(i).getIcon();
-					if(icon!=null && icon.getColorFilter()==null){
-						icon.setColorFilter(tintColor, PorterDuff.Mode.SRC_IN);
+					MenuItem item=menu.getItem(i);
+					if(Build.VERSION.SDK_INT<Build.VERSION_CODES.O){
+						Drawable icon=item.getIcon();
+						if(icon!=null && icon.getColorFilter()==null){
+							icon=icon.mutate();
+							icon.setTintList(tintColor);
+							item.setIcon(icon);
+						}
+					}else{
+						item.setIconTintList(tintColor);
 					}
 				}
 			}
@@ -308,11 +327,15 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 				navigationSpinner.setSelection(selectedItem);
 				ignoreSpinnerSelection=false;
 			}
-			toolbar=(Toolbar)LayoutInflater.from(getActivity()).inflate(getToolbarResource(), parent, false);
+			toolbar=(Toolbar)getToolbarLayoutInflater().inflate(getToolbarResource(), parent, false);
 			parent.addView(toolbar, index);
 			initToolbar();
 			updateToolbarMarquee();
 		}
+	}
+
+	protected LayoutInflater getToolbarLayoutInflater(){
+		return LayoutInflater.from(getActivity());
 	}
 
 	@LayoutRes
