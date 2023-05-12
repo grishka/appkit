@@ -185,7 +185,7 @@ public class FragmentStackActivity extends Activity{
 		showFragment(fragment);
 	}
 
-	public void removeFragment(Fragment target){
+	public void removeFragment(Fragment target, boolean hideKeyboard){
 		Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
 		if(target==currentFragment){ // top-most, remove with animation and show whatever is underneath
 			final FrameLayout wrap=fragmentContainers.remove(fragmentContainers.size()-1);
@@ -247,8 +247,10 @@ public class FragmentStackActivity extends Activity{
 					return true;
 				}
 			});
-			InputMethodManager imm=(InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-			imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+			if(hideKeyboard){
+				InputMethodManager imm=(InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+				imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+			}
 			setTitle(getTitleForFragment(prevFragment));
 		}else{
 			int id=target.getId();
@@ -272,7 +274,7 @@ public class FragmentStackActivity extends Activity{
 			if(currentFragment instanceof OnBackPressedListener && ((OnBackPressedListener) currentFragment).onBackPressed())
 				return;
 			if(fragmentContainers.size()>1){
-				removeFragment(currentFragment);
+				removeFragment(currentFragment, true);
 				return;
 			}
 		}

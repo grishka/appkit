@@ -62,6 +62,10 @@ public class Nav{
 	}
 
 	public static void finish(Fragment fragment){
-		((FragmentStackActivity)fragment.getActivity()).removeFragment(fragment);
+		((FragmentStackActivity)fragment.getActivity()).removeFragment(fragment, true);
+	}
+
+	public static void finish(Fragment fragment, boolean hideKeyboard){
+		((FragmentStackActivity)fragment.getActivity()).removeFragment(fragment, hideKeyboard);
 	}
 }
