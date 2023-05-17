@@ -32,7 +32,7 @@ import me.grishka.appkit.views.UsableRecyclerView;
 /**
  * Created by grishka on 16.06.15.
  */
-public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements SwipeRefreshLayout.OnRefreshListener, ListImageLoaderWrapper.Listener, Preloader.Callback<T> {
+public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements SwipeRefreshLayout.OnRefreshListener, ListImageLoaderWrapper.Listener, Preloader.Callback<T>{
 
 	protected int itemsPerPage;
 	protected RecyclerView list;
@@ -53,11 +53,11 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	private boolean refreshAfterCreate=false;
 	private boolean preloadingFailed=false;
 
-	public void setListLayoutId(int listLayoutId) {
-		this.listLayoutId = listLayoutId;
+	public void setListLayoutId(int listLayoutId){
+		this.listLayoutId=listLayoutId;
 	}
 
-	private int listLayoutId = R.layout.recycler_fragment;
+	private int listLayoutId=R.layout.recycler_fragment;
 
 	public BaseRecyclerFragment(int perPage){
 		itemsPerPage=perPage;
@@ -97,36 +97,63 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	public View onCreateContentView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState){
 		View view=inflater.inflate(listLayoutId, null);
 
-		list=(RecyclerView)view.findViewById(R.id.list);
+		list=view.findViewById(R.id.list);
 		emptyView=view.findViewById(R.id.empty);
 		if(emptyView instanceof ViewStub){
 			emptyView=((ViewStub) emptyView).inflate();
 		}
-		refreshLayout= (SwipeRefreshLayout) view.findViewById(R.id.refresh_layout);
-		contentWrap=(FrameLayout)view.findViewById(R.id.content_wrap);
-		((TextView)emptyView.findViewById(R.id.empty_text)).setText(emptyText);
-		emptyButton=(Button)emptyView.findViewById(R.id.empty_button);
+		refreshLayout=view.findViewById(R.id.refresh_layout);
+		contentWrap=view.findViewById(R.id.content_wrap);
+		((TextView) emptyView.findViewById(R.id.empty_text)).setText(emptyText);
+		emptyButton=emptyView.findViewById(R.id.empty_button);
 		if(emptyButton!=null){
 			emptyButton.setText(emptyButtonText);
 			emptyButton.setVisibility(emptyButtonVisible ? View.VISIBLE : View.GONE);
-			emptyButton.setOnClickListener(new View.OnClickListener(){
-				@Override
-				public void onClick(View v){
-					onEmptyViewBtnClick();
-				}
-			});
+			emptyButton.setOnClickListener(v->onEmptyViewBtnClick());
 		}
 
 		RecyclerView.LayoutManager lmgr=onCreateLayoutManager();
 		if(lmgr instanceof GridLayoutManager){
 			final GridLayoutManager.SpanSizeLookup prevLookup=((GridLayoutManager) lmgr).getSpanSizeLookup();
-			((GridLayoutManager) lmgr).setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+			((GridLayoutManager) lmgr).setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup(){
 				@Override
-				public int getSpanSize(int pos) {
+				public int getSpanSize(int pos){
 					if(list==null) return 1;
-					if (list instanceof UsableRecyclerView && pos == ((UsableRecyclerView)list).getRealAdapter().getItemCount() - 1 && preloader.isFooterVisible() && footerView!=null)
+					if(list instanceof UsableRecyclerView && pos==((UsableRecyclerView) list).getRealAdapter().getItemCount()-1 && preloader.isFooterVisible() && footerView!=null)
 						return ((GridLayoutManager) list.getLayoutManager()).getSpanCount();
 					return prevLookup==null ? 1 : prevLookup.getSpanSize(pos);
+				}
+
+				public void setSpanIndexCacheEnabled(boolean cacheSpanIndices){
+					prevLookup.setSpanIndexCacheEnabled(cacheSpanIndices);
+				}
+
+				public void setSpanGroupIndexCacheEnabled(boolean cacheSpanGroupIndices){
+					prevLookup.setSpanGroupIndexCacheEnabled(cacheSpanGroupIndices);
+				}
+
+				public void invalidateSpanIndexCache(){
+					prevLookup.invalidateSpanIndexCache();
+				}
+
+				public void invalidateSpanGroupIndexCache(){
+					prevLookup.invalidateSpanGroupIndexCache();
+				}
+
+				public boolean isSpanIndexCacheEnabled(){
+					return prevLookup.isSpanIndexCacheEnabled();
+				}
+
+				public boolean isSpanGroupIndexCacheEnabled(){
+					return prevLookup.isSpanGroupIndexCacheEnabled();
+				}
+
+				public int getSpanIndex(int position, int spanCount){
+					return prevLookup.getSpanIndex(position, spanCount);
+				}
+
+				public int getSpanGroupIndex(int adapterPosition, int spanCount){
+					return prevLookup.getSpanGroupIndex(adapterPosition, spanCount);
 				}
 			});
 		}
@@ -139,33 +166,33 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			refreshLayout.setEnabled(refreshEnabled);
 		}
 		if(list instanceof EmptyViewCapable)
-			((EmptyViewCapable)list).setEmptyView(emptyView);
+			((EmptyViewCapable) list).setEmptyView(emptyView);
 		if(list instanceof ListImageLoaderAdapter){
 			imgLoader=new ListImageLoaderWrapper(getActivity(), (ListImageLoaderAdapter) list, new RecyclerViewDelegate(list), this);
 		}
-		RecyclerView.Adapter adapter=getAdapter();
-		footerView=onCreateFooterView(inflater);
+
+		return view;
+	}
+
+	@Override
+	public void onViewCreated(View view, Bundle savedInstanceState){
+		super.onViewCreated(view, savedInstanceState);
+		RecyclerView.Adapter<?> adapter=getAdapter();
+		footerView=onCreateFooterView(getActivity().getLayoutInflater());
 		list.setAdapter(adapter);
-		if(footerView!=null) {
-			footerProgress = footerView.findViewById(R.id.load_more_progress);
-			footerError = footerView.findViewById(R.id.load_more_error);
+		if(footerView!=null){
+			footerProgress=footerView.findViewById(R.id.load_more_progress);
+			footerError=footerView.findViewById(R.id.load_more_error);
 			footerError.setVisibility(View.GONE);
-			if (list instanceof UsableRecyclerView)
+			if(list instanceof UsableRecyclerView)
 				((UsableRecyclerView) list).addFooterView(footerView);
 
-			footerError.findViewById(R.id.error_retry).setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View view) {
-					onErrorRetryClick();
-				}
-			});
+			footerError.findViewById(R.id.error_retry).setOnClickListener(v->onErrorRetryClick());
 			preloader.setFooterViews(footerProgress, footerError);
 		}
 
 		if(refreshAfterCreate)
 			refresh();
-
-		return view;
 	}
 
 	protected void beforeSetAdapter(){
@@ -177,7 +204,8 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	protected abstract void doLoadData(int offset, int count);
-	protected abstract RecyclerView.Adapter getAdapter();
+
+	protected abstract RecyclerView.Adapter<?> getAdapter();
 
 	public void onAppendItems(List<T> items){
 
@@ -192,18 +220,18 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	@Override
-	public void onScrolledToLastItem() {
+	public void onScrolledToLastItem(){
 		if(refreshing || preloadingFailed) return;
 		preloader.onScrolledToLastItem();
 	}
 
 	@Override
-	public void onScrollStarted() {
+	public void onScrollStarted(){
 
 	}
 
 	@Override
-	public void onScrollStopped() {
+	public void onScrollStopped(){
 
 	}
 
@@ -233,18 +261,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	protected void onDataLoaded(List<T> d){
-		dataLoading=false;
-		currentRequest=null;
-		loaded=true;
-		data.clear();
-		data.addAll(d);
-		updateList();
-		if(list==null) return;
-		if(refreshing)
-			refreshDone();
-		V.setVisibilityAnimated(refreshLayout!=null ? refreshLayout : contentWrap, View.VISIBLE);
-		V.setVisibilityAnimated(progress, View.GONE);
-		V.setVisibilityAnimated(errorView, View.GONE);
+		onDataLoaded(d, false);
 	}
 
 	public void updateList(){
@@ -256,7 +273,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 
 	protected ListImageLoaderAdapter getImageLoaderAdapter(){
 		if(list instanceof ListImageLoaderAdapter)
-			return (ListImageLoaderAdapter)list;
+			return (ListImageLoaderAdapter) list;
 		return null;
 	}
 
@@ -280,9 +297,9 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	@Override
-	public void onRefresh() {
+	public void onRefresh(){
 		refreshing=true;
-		if(footerView!=null) {
+		if(footerView!=null){
 			footerError.setVisibility(View.GONE);
 			footerProgress.setVisibility(View.VISIBLE);
 		}
@@ -312,6 +329,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 
 		V.setVisibilityAnimated(refreshLayout!=null ? refreshLayout : contentWrap, View.VISIBLE);
 		V.setVisibilityAnimated(progress, View.GONE);
+		V.setVisibilityAnimated(errorView, View.GONE);
 	}
 
 	protected void setEmptyText(@StringRes int text){
@@ -321,7 +339,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	protected void setEmptyText(CharSequence text){
 		emptyText=text;
 		if(emptyView!=null)
-			((TextView)emptyView.findViewById(R.id.empty_text)).setText(text);
+			((TextView) emptyView.findViewById(R.id.empty_text)).setText(text);
 	}
 
 	protected void setEmptyButtonText(@StringRes int text){
@@ -346,9 +364,9 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			return;
 		}
 		if(refreshLayout!=null){
-			refreshLayout.post(new Runnable() {
+			refreshLayout.post(new Runnable(){
 				@Override
-				public void run() {
+				public void run(){
 					refreshLayout.setRefreshing(true);
 					refreshLayout.setEnabled(false);
 				}
@@ -361,7 +379,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	@Override
-	protected void doLoadData() {
+	protected void doLoadData(){
 		//Log.e("appkit", "Load data 2, "+dataLoading);
 		//try{throw new Exception("fdsaf");}catch(Exception x){Log.e("appkit", "load data 2", x);}
 		doLoadData(0, itemsPerPage*2);
@@ -374,12 +392,12 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	@Override
-	public boolean isDataLoading() {
+	public boolean isDataLoading(){
 		return dataLoading;
 	}
 
 	@Override
-	public boolean isRefreshing() {
+	public boolean isRefreshing(){
 		return refreshing;
 	}
 
@@ -390,7 +408,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		if(errorView==null) return;
 		if(refreshing)
 			refreshDone();
-		if(refreshing) {
+		if(refreshing){
 			error.showToast(getActivity());
 		}else if(data.size()>0){
 			preloadingFailed=true;
@@ -411,7 +429,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	}
 
 	@Override
-	protected void onErrorRetryClick() {
+	protected void onErrorRetryClick(){
 		if(preloadingFailed){
 			preloadingFailed=false;
 			V.setVisibilityAnimated(footerProgress, View.VISIBLE);
