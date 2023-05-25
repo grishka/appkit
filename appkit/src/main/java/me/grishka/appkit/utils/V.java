@@ -44,7 +44,7 @@ public class V{
 	
 	/**
 	 * Scale the input value according to the device's scaled display density
-	 * @param dp Input value in scale-independent pixels (sp)
+	 * @param sp Input value in scale-independent pixels (sp)
 	 * @return Scaled value in physical pixels (px)
 	 */
 	public static int sp(float sp){
