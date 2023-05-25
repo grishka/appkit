@@ -255,7 +255,9 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	public void reload(){
 		loaded=false;
 		data.clear();
+		preloadedData.clear();
 		onClearItems();
+		list.getAdapter().notifyDataSetChanged();
 		showProgress();
 		loadData();
 	}
