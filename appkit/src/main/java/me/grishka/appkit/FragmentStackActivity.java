@@ -8,15 +8,15 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewPropertyAnimator;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import me.grishka.appkit.fragments.AppKitFragment;
+import me.grishka.appkit.fragments.CustomTransitionsFragment;
 import me.grishka.appkit.fragments.OnBackPressedListener;
 import me.grishka.appkit.fragments.WindowInsetsAwareFragment;
 import me.grishka.appkit.utils.CubicBezierInterpolator;
@@ -70,7 +71,7 @@ public class FragmentStackActivity extends Activity{
 			if(ids.length>0){
 				int last=ids[ids.length-1];
 				for(int id : ids){
-					FrameLayout wrap=new FrameLayout(this);
+					FrameLayout wrap=new FragmentContainer(this);
 					wrap.setId(id);
 					if(id!=last)
 						wrap.setVisibility(View.GONE);
@@ -104,7 +105,7 @@ public class FragmentStackActivity extends Activity{
 	}
 
 	public void showFragment(final Fragment fragment){
-		final FrameLayout wrap=new FrameLayout(this);
+		final FrameLayout wrap=new FragmentContainer(this);
 		wrap.setId(View.generateViewId());
 		content.addView(wrap);
 		fragmentContainers.add(wrap);
@@ -120,53 +121,60 @@ public class FragmentStackActivity extends Activity{
 			lightStatus=lightNav=false;
 		}
 		if(fragmentContainers.size()>1){
-			AnimatorSet anim=new AnimatorSet();
-			anim.playTogether(
-					ObjectAnimator.ofFloat(wrap, View.ALPHA, 0f, 1f),
-					ObjectAnimator.ofFloat(wrap, View.TRANSLATION_X, V.dp(100), 0)
-			);
-			anim.setDuration(300);
-			anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
-			anim.addListener(new AnimatorListenerAdapter(){
-				@Override
-				public void onAnimationEnd(Animator animation){
-					for(int i=0; i<fragmentContainers.size()-1; i++){
-						View container=fragmentContainers.get(i);
-						if(container.getVisibility()==View.VISIBLE){
-							Fragment otherFragment=getFragmentManager().findFragmentById(container.getId());
-							getFragmentManager().beginTransaction().hide(otherFragment).commit();
-							getFragmentManager().executePendingTransactions();
-							container.setVisibility(View.GONE);
-						}
+			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-2);
+			Animator anim;
+			if(fragment instanceof CustomTransitionsFragment ctf)
+				anim=ctf.onCreateEnterTransition(prevWrap, wrap);
+			else
+				anim=createFragmentEnterTransition(prevWrap, wrap);
+			Runnable onEnd=()->{
+				for(int i=0; i<fragmentContainers.size()-1; i++){
+					View container=fragmentContainers.get(i);
+					if(container.getVisibility()==View.VISIBLE){
+						Fragment otherFragment=getFragmentManager().findFragmentById(container.getId());
+						getFragmentManager().beginTransaction().hide(otherFragment).commit();
+						getFragmentManager().executePendingTransactions();
+						container.setVisibility(View.GONE);
 					}
-					if(fragment instanceof AppKitFragment)
-						((AppKitFragment) fragment).onTransitionFinished();
-					runningAnimators.remove(animation);
-					if(runningAnimators.isEmpty())
-						onAllFragmentTransitionsDone();
 				}
-			});
-			if(runningAnimators.isEmpty())
-				onFragmentTransitionStart();
-			runningAnimators.add(anim);
-			anim.start();
-			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
-				private float prevAlpha=wrap.getAlpha();
-				@Override
-				public boolean onPreDraw(){
-					float alpha=wrap.getAlpha();
-					if(prevAlpha>alpha){
-						wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+				if(fragment instanceof AppKitFragment)
+					((AppKitFragment) fragment).onTransitionFinished();
+			};
+			if(anim!=null){
+				anim.addListener(new AnimatorListenerAdapter(){
+					@Override
+					public void onAnimationEnd(Animator animation){
+						onEnd.run();
+						runningAnimators.remove(animation);
+						if(runningAnimators.isEmpty())
+							onAllFragmentTransitionsDone();
+					}
+				});
+				if(runningAnimators.isEmpty())
+					onFragmentTransitionStart();
+				runningAnimators.add(anim);
+				anim.start();
+				wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
+					private float prevAlpha=wrap.getAlpha();
+					@Override
+					public boolean onPreDraw(){
+						float alpha=wrap.getAlpha();
+						if(prevAlpha>alpha){
+							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+							return true;
+						}
+						if(alpha>=0.5f){
+							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+							applySystemBarColors(lightStatus, lightNav);
+						}
+						prevAlpha=alpha;
 						return true;
 					}
-					if(alpha>=0.5f){
-						wrap.getViewTreeObserver().removeOnPreDrawListener(this);
-						applySystemBarColors(lightStatus, lightNav);
-					}
-					prevAlpha=alpha;
-					return true;
-				}
-			});
+				});
+			}else{
+				onEnd.run();
+				applySystemBarColors(lightStatus, lightNav);
+			}
 		}else{
 			applySystemBarColors(lightStatus, lightNav);
 		}
@@ -207,46 +215,51 @@ public class FragmentStackActivity extends Activity{
 			}else{
 				lightStatus=lightNav=false;
 			}
-			AnimatorSet anim=new AnimatorSet();
-			// TODO customizable animations
-			anim.playTogether(
-					ObjectAnimator.ofFloat(wrap, View.TRANSLATION_X, V.dp(100)),
-					ObjectAnimator.ofFloat(wrap, View.ALPHA, 0)
-			);
-			anim.setDuration(200);
-			anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
-			anim.addListener(new AnimatorListenerAdapter(){
-				@Override
-				public void onAnimationEnd(Animator animation){
-					getFragmentManager().beginTransaction().remove(fragment).commit();
-					getFragmentManager().executePendingTransactions();
-					content.removeView(wrap);
-					runningAnimators.remove(animation);
-					if(runningAnimators.isEmpty())
-						onAllFragmentTransitionsDone();
-				}
-			});
-			if(runningAnimators.isEmpty())
-				onFragmentTransitionStart();
-			runningAnimators.add(anim);
-			anim.start();
-			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
-				private float prevAlpha=wrap.getAlpha();
-				@Override
-				public boolean onPreDraw(){
-					float alpha=wrap.getAlpha();
-					if(prevAlpha<alpha){
-						wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+			Animator anim;
+			if(fragment instanceof CustomTransitionsFragment ctf)
+				anim=ctf.onCreateExitTransition(prevWrap, wrap);
+			else
+				anim=createFragmentExitTransition(prevWrap, wrap);
+			Runnable onEnd=()->{
+				getFragmentManager().beginTransaction().remove(fragment).commit();
+				getFragmentManager().executePendingTransactions();
+				content.removeView(wrap);
+			};
+			if(anim!=null){
+				anim.addListener(new AnimatorListenerAdapter(){
+					@Override
+					public void onAnimationEnd(Animator animation){
+						onEnd.run();
+						runningAnimators.remove(animation);
+						if(runningAnimators.isEmpty())
+							onAllFragmentTransitionsDone();
+					}
+				});
+				if(runningAnimators.isEmpty())
+					onFragmentTransitionStart();
+				runningAnimators.add(anim);
+				anim.start();
+				wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
+					private float prevAlpha=wrap.getAlpha();
+					@Override
+					public boolean onPreDraw(){
+						float alpha=wrap.getAlpha();
+						if(prevAlpha<alpha){
+							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+							return true;
+						}
+						if(alpha<=0.5f){
+							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+							applySystemBarColors(lightStatus, lightNav);
+						}
+						prevAlpha=alpha;
 						return true;
 					}
-					if(alpha<=0.5f){
-						wrap.getViewTreeObserver().removeOnPreDrawListener(this);
-						applySystemBarColors(lightStatus, lightNav);
-					}
-					prevAlpha=alpha;
-					return true;
-				}
-			});
+				});
+			}else{
+				onEnd.run();
+				applySystemBarColors(lightStatus, lightNav);
+			}
 			if(hideKeyboard){
 				InputMethodManager imm=(InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
 				imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
@@ -323,12 +336,7 @@ public class FragmentStackActivity extends Activity{
 
 	public void invalidateSystemBarColors(final WindowInsetsAwareFragment fragment){
 		if(getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId())==fragment){
-			content.post(new Runnable(){
-				@Override
-				public void run(){
-					applySystemBarColors(fragment.wantsLightStatusBar(), fragment.wantsLightNavigationBar());
-				}
-			});
+			content.post(()->applySystemBarColors(fragment.wantsLightStatusBar(), fragment.wantsLightNavigationBar()));
 		}
 	}
 
@@ -346,6 +354,28 @@ public class FragmentStackActivity extends Activity{
 			ids[i]=fragmentContainers.get(i).getId();
 		}
 		outState.putIntArray("appkit:fragmentContainerIDs", ids);
+	}
+
+	protected Animator createFragmentEnterTransition(View prev, View container){
+		AnimatorSet anim=new AnimatorSet();
+		anim.playTogether(
+				ObjectAnimator.ofFloat(container, View.ALPHA, 0f, 1f),
+				ObjectAnimator.ofFloat(container, View.TRANSLATION_X, V.dp(100), 0)
+		);
+		anim.setDuration(300);
+		anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+		return anim;
+	}
+
+	protected Animator createFragmentExitTransition(View prev, View container){
+		AnimatorSet anim=new AnimatorSet();
+		anim.playTogether(
+				ObjectAnimator.ofFloat(container, View.TRANSLATION_X, V.dp(100)),
+				ObjectAnimator.ofFloat(container, View.ALPHA, 0)
+		);
+		anim.setDuration(200);
+		anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+		return anim;
 	}
 
 	protected CharSequence getTitleForFragment(Fragment fragment){
@@ -367,5 +397,23 @@ public class FragmentStackActivity extends Activity{
 
 	protected void onAllFragmentTransitionsDone(){
 		blockInputEvents=false;
+	}
+
+	private class FragmentContainer extends FrameLayout{
+		public Fragment fragment;
+
+		public FragmentContainer(@NonNull Context context){
+			super(context);
+		}
+
+		@Override
+		public void addView(View child, int index, ViewGroup.LayoutParams params){
+			super.addView(child, index, params);
+			if(fragment==null)
+				fragment=getFragmentManager().findFragmentById(getId());
+
+			if(fragment instanceof WindowInsetsAwareFragment waf)
+				invalidateSystemBarColors(waf);
+		}
 	}
 }
