@@ -51,7 +51,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	protected boolean refreshing=false;
 	private boolean refreshEnabled=true;
 	private boolean refreshAfterCreate=false;
-	private boolean preloadingFailed=false;
+	protected boolean preloadingFailed=false;
 
 	public void setListLayoutId(int listLayoutId){
 		this.listLayoutId=listLayoutId;
