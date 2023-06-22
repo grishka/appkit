@@ -40,7 +40,7 @@ afterEvaluate { project ->
 
     task javadocJar(type: Jar) {
         classifier = 'javadoc'
-        from "/dev/null"
+        from android.sourceSets.main.java.sourceFiles
     }
 
     publishing {

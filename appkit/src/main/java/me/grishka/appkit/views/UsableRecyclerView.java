@@ -149,7 +149,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	public void setSelector(@DrawableRes int drawableRes){
-		setSelector(getResources().getDrawable(drawableRes));
+		setSelector(getResources().getDrawable(drawableRes, getContext().getTheme()));
 	}
 
 	public void setSelector(Drawable selector){
