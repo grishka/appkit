@@ -121,60 +121,68 @@ public class FragmentStackActivity extends Activity{
 			lightStatus=lightNav=false;
 		}
 		if(fragmentContainers.size()>1){
-			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-2);
-			Animator anim;
-			if(fragment instanceof CustomTransitionsFragment ctf)
-				anim=ctf.onCreateEnterTransition(prevWrap, wrap);
-			else
-				anim=createFragmentEnterTransition(prevWrap, wrap);
-			Runnable onEnd=()->{
-				for(int i=0; i<fragmentContainers.size()-1; i++){
-					View container=fragmentContainers.get(i);
-					if(container.getVisibility()==View.VISIBLE){
-						Fragment otherFragment=getFragmentManager().findFragmentById(container.getId());
-						getFragmentManager().beginTransaction().hide(otherFragment).commit();
-						getFragmentManager().executePendingTransactions();
-						container.setVisibility(View.GONE);
-					}
-				}
-				if(fragment instanceof AppKitFragment)
-					((AppKitFragment) fragment).onTransitionFinished();
-			};
-			if(anim!=null){
-				anim.addListener(new AnimatorListenerAdapter(){
-					@Override
-					public void onAnimationEnd(Animator animation){
-						onEnd.run();
-						runningAnimators.remove(animation);
+			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
+				@Override
+				public boolean onPreDraw(){
+					wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+
+					FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-2);
+					Animator anim;
+					if(fragment instanceof CustomTransitionsFragment ctf)
+						anim=ctf.onCreateEnterTransition(prevWrap, wrap);
+					else
+						anim=createFragmentEnterTransition(prevWrap, wrap);
+					Runnable onEnd=()->{
+						for(int i=0; i<fragmentContainers.size()-1; i++){
+							View container=fragmentContainers.get(i);
+							if(container.getVisibility()==View.VISIBLE){
+								Fragment otherFragment=getFragmentManager().findFragmentById(container.getId());
+								getFragmentManager().beginTransaction().hide(otherFragment).commit();
+								getFragmentManager().executePendingTransactions();
+								container.setVisibility(View.GONE);
+							}
+						}
+						if(fragment instanceof AppKitFragment akf)
+							akf.onTransitionFinished();
+					};
+					if(anim!=null){
+						anim.addListener(new AnimatorListenerAdapter(){
+							@Override
+							public void onAnimationEnd(Animator animation){
+								onEnd.run();
+								runningAnimators.remove(animation);
+								if(runningAnimators.isEmpty())
+									onAllFragmentTransitionsDone();
+							}
+						});
 						if(runningAnimators.isEmpty())
-							onAllFragmentTransitionsDone();
+							onFragmentTransitionStart();
+						runningAnimators.add(anim);
+						anim.start();
+						wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
+							private float prevAlpha=wrap.getAlpha();
+							@Override
+							public boolean onPreDraw(){
+								float alpha=wrap.getAlpha();
+								if(prevAlpha>alpha){
+									wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+									return true;
+								}
+								if(alpha>=0.5f){
+									wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+									applySystemBarColors(lightStatus, lightNav);
+								}
+								prevAlpha=alpha;
+								return true;
+							}
+						});
+					}else{
+						onEnd.run();
+						applySystemBarColors(lightStatus, lightNav);
 					}
-				});
-				if(runningAnimators.isEmpty())
-					onFragmentTransitionStart();
-				runningAnimators.add(anim);
-				anim.start();
-				wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
-					private float prevAlpha=wrap.getAlpha();
-					@Override
-					public boolean onPreDraw(){
-						float alpha=wrap.getAlpha();
-						if(prevAlpha>alpha){
-							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
-							return true;
-						}
-						if(alpha>=0.5f){
-							wrap.getViewTreeObserver().removeOnPreDrawListener(this);
-							applySystemBarColors(lightStatus, lightNav);
-						}
-						prevAlpha=alpha;
-						return true;
-					}
-				});
-			}else{
-				onEnd.run();
-				applySystemBarColors(lightStatus, lightNav);
-			}
+					return true;
+				}
+			});
 		}else{
 			applySystemBarColors(lightStatus, lightNav);
 		}
