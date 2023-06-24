@@ -366,13 +366,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			return;
 		}
 		if(refreshLayout!=null){
-			refreshLayout.post(new Runnable(){
-				@Override
-				public void run(){
-					refreshLayout.setRefreshing(true);
-					refreshLayout.setEnabled(false);
-				}
-			});
+			refreshLayout.post(()->refreshLayout.setRefreshing(true));
 			onRefresh();
 			refreshAfterCreate=false;
 		}else{
