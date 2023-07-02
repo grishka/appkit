@@ -41,6 +41,7 @@ public class FragmentStackActivity extends Activity{
 	protected boolean blockInputEvents; // during fragment transitions
 	protected boolean instanceStateSaved;
 	private ArrayList<Integer> pendingFragmentRemovals=new ArrayList<>();
+	private ArrayList<Fragment> pendingFragmentAdditions=new ArrayList<>();
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -107,6 +108,10 @@ public class FragmentStackActivity extends Activity{
 	}
 
 	public void showFragment(final Fragment fragment){
+		if(instanceStateSaved){
+			pendingFragmentAdditions.add(fragment);
+			return;
+		}
 		final FrameLayout wrap=new FragmentContainer(this);
 		wrap.setId(View.generateViewId());
 		content.addView(wrap);
@@ -383,6 +388,12 @@ public class FragmentStackActivity extends Activity{
 				}
 			}
 			pendingFragmentRemovals.clear();
+		}
+		if(!pendingFragmentAdditions.isEmpty()){
+			for(Fragment f:pendingFragmentAdditions){
+				showFragment(f);
+			}
+			pendingFragmentAdditions.clear();
 		}
 	}
 
