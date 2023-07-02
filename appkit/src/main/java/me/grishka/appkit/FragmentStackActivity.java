@@ -39,6 +39,8 @@ public class FragmentStackActivity extends Activity{
 	protected WindowInsets lastInsets;
 	protected ArrayList<Animator> runningAnimators=new ArrayList<>();
 	protected boolean blockInputEvents; // during fragment transitions
+	protected boolean instanceStateSaved;
+	private ArrayList<Integer> pendingFragmentRemovals=new ArrayList<>();
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -202,6 +204,10 @@ public class FragmentStackActivity extends Activity{
 	}
 
 	public void removeFragment(Fragment target, boolean hideKeyboard){
+		if(instanceStateSaved){
+			pendingFragmentRemovals.add(target.getId());
+			return;
+		}
 		Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
 		if(target==currentFragment){ // top-most, remove with animation and show whatever is underneath
 			final FrameLayout wrap=fragmentContainers.remove(fragmentContainers.size()-1);
@@ -362,6 +368,22 @@ public class FragmentStackActivity extends Activity{
 			ids[i]=fragmentContainers.get(i).getId();
 		}
 		outState.putIntArray("appkit:fragmentContainerIDs", ids);
+		instanceStateSaved=true;
+	}
+
+	@Override
+	protected void onResume(){
+		super.onResume();
+		instanceStateSaved=false;
+		if(!pendingFragmentRemovals.isEmpty()){
+			for(int id:pendingFragmentRemovals){
+				Fragment f=getFragmentManager().findFragmentById(id);
+				if(f!=null){
+					removeFragment(f, true);
+				}
+			}
+			pendingFragmentRemovals.clear();
+		}
 	}
 
 	protected Animator createFragmentEnterTransition(View prev, View container){
