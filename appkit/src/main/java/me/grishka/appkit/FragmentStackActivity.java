@@ -443,7 +443,7 @@ public class FragmentStackActivity extends Activity{
 		blockInputEvents=false;
 	}
 
-	private int generateViewId(){
+	public int generateViewId(){
 		int r=nextViewID;
 		nextViewID++;
 		if(nextViewID>0x00FFFFFF){
