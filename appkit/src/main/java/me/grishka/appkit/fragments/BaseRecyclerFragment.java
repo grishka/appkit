@@ -37,6 +37,7 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 	protected int itemsPerPage;
 	protected RecyclerView list;
 	protected View emptyView;
+	protected TextView emptyTextView;
 	protected SwipeRefreshLayout refreshLayout;
 
 	protected View footerView, footerProgress, footerError;
@@ -104,7 +105,8 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		}
 		refreshLayout=view.findViewById(R.id.refresh_layout);
 		contentWrap=view.findViewById(R.id.content_wrap);
-		((TextView) emptyView.findViewById(R.id.empty_text)).setText(emptyText);
+		emptyTextView=(TextView) emptyView.findViewById(R.id.empty_text);
+		emptyTextView.setText(emptyText);
 		emptyButton=emptyView.findViewById(R.id.empty_button);
 		if(emptyButton!=null){
 			emptyButton.setText(emptyButtonText);
