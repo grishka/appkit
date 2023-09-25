@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-			  android:orientation="vertical"
-			  android:layout_width="match_parent"
-			  android:layout_height="match_parent"
-	android:gravity="center">
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:gravity="center"
+	android:orientation="vertical">
 
 	<TextView
 		android:id="@+id/empty_text"
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:layout_margin="16dip"
-		android:textColor="#999"
 		android:gravity="center"
-		android:textSize="16dip"/>
+		android:textAppearance="?appkitEmptyTextAppearance"
+		tools:text="@string/empty_list"/>
 
 	<Button
 		android:id="@+id/empty_button"

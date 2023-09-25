@@ -12,6 +12,7 @@
 		<item name="appkitToolbarBackground">?android:attr/colorPrimary</item>
 		<item name="appkitToolbarElevation">3dp</item>
 		<item name="actionBarIconTint">?android:colorControlNormal</item>
+		<item name="appkitEmptyTextAppearance">?android:textAppearanceMedium</item>
 
 		<item name="appkitDefaultErrorText">Error</item>
 		<item name="appkitRetryButtonText">Retry</item>
@@ -28,6 +29,7 @@
 		<item name="appkitToolbarBackground">?android:attr/colorPrimary</item>
 		<item name="appkitToolbarElevation">3dp</item>
 		<item name="actionBarIconTint">?android:colorControlNormal</item>
+		<item name="appkitEmptyTextAppearance">?android:textAppearanceMedium</item>
 
 		<item name="appkitDefaultErrorText">Error</item>
 		<item name="appkitRetryButtonText">Retry</item>
