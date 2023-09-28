@@ -356,7 +356,7 @@ public class FragmentStackActivity extends Activity{
 	}
 
 	public void invalidateSystemBarColors(final WindowInsetsAwareFragment fragment){
-		if(getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId())==fragment){
+		if(!fragmentContainers.isEmpty() && getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId())==fragment){
 			content.post(()->applySystemBarColors(fragment.wantsLightStatusBar(), fragment.wantsLightNavigationBar()));
 		}
 	}
@@ -465,8 +465,9 @@ public class FragmentStackActivity extends Activity{
 			if(fragment==null)
 				fragment=getFragmentManager().findFragmentById(getId());
 
-			if(fragment instanceof WindowInsetsAwareFragment waf)
-				invalidateSystemBarColors(waf);
+			if(fragment instanceof WindowInsetsAwareFragment waf){
+				post(()->invalidateSystemBarColors(waf));
+			}
 		}
 	}
 }
