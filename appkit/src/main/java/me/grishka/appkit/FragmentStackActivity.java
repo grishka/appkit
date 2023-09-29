@@ -42,7 +42,6 @@ public class FragmentStackActivity extends Activity{
 	protected boolean instanceStateSaved;
 	private ArrayList<Integer> pendingFragmentRemovals=new ArrayList<>();
 	private ArrayList<Fragment> pendingFragmentAdditions=new ArrayList<>();
-	private int nextViewID=1;
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -71,7 +70,6 @@ public class FragmentStackActivity extends Activity{
 		getWindow().setNavigationBarColor(0);
 
 		if(savedInstanceState!=null){
-			nextViewID=savedInstanceState.getInt("appkit:nextGeneratedViewID", 1);
 			int[] ids=savedInstanceState.getIntArray("appkit:fragmentContainerIDs");
 			if(ids.length>0){
 				int last=ids[ids.length-1];
@@ -115,7 +113,7 @@ public class FragmentStackActivity extends Activity{
 			return;
 		}
 		final FrameLayout wrap=new FragmentContainer(this);
-		wrap.setId(generateViewId());
+		wrap.setId(View.generateViewId());
 		content.addView(wrap);
 		fragmentContainers.add(wrap);
 		getFragmentManager().beginTransaction().add(wrap.getId(), fragment, "stackedFragment_"+wrap.getId()).commit();
@@ -375,7 +373,6 @@ public class FragmentStackActivity extends Activity{
 			ids[i]=fragmentContainers.get(i).getId();
 		}
 		outState.putIntArray("appkit:fragmentContainerIDs", ids);
-		outState.putInt("appkit:nextGeneratedViewID", nextViewID);
 		instanceStateSaved=true;
 	}
 
@@ -443,14 +440,6 @@ public class FragmentStackActivity extends Activity{
 		blockInputEvents=false;
 	}
 
-	public int generateViewId(){
-		int r=nextViewID;
-		nextViewID++;
-		if(nextViewID>0x00FFFFFF){
-			nextViewID=1;
-		}
-		return r;
-	}
 
 	private class FragmentContainer extends FrameLayout{
 		public Fragment fragment;

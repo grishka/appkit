@@ -5,7 +5,6 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import me.grishka.appkit.FragmentStackActivity;
 
 public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRecyclerAdapter.ViewViewHolder>{
 
@@ -14,10 +13,7 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 
 	public SingleViewRecyclerAdapter(View view){
 		this.view=view;
-		if(view.getContext() instanceof FragmentStackActivity fsa)
-			id=fsa.generateViewId();
-		else
-			id=View.generateViewId();
+		id=View.generateViewId();
 	}
 
 	@NonNull
