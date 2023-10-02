@@ -46,21 +46,7 @@ public class FragmentStackActivity extends Activity{
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
-		content=new FrameLayout(this){
-			@Override
-			public WindowInsets onApplyWindowInsets(WindowInsets insets){
-				lastInsets=new WindowInsets(insets);
-				FragmentManager mgr=getFragmentManager();
-				for(int i=0;i<getChildCount();i++){
-					View child=getChildAt(i);
-					Fragment fragment=mgr.findFragmentById(child.getId());
-					if(fragment instanceof WindowInsetsAwareFragment){
-						((WindowInsetsAwareFragment) fragment).onApplyWindowInsets(new WindowInsets(insets));
-					}
-				}
-				return insets.consumeSystemWindowInsets();
-			}
-		};
+		content=new FragmentStackContainer(this);
 		content.setId(R.id.fragment_wrap);
 		content.setFitsSystemWindows(true);
 		getWindow().getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
@@ -80,7 +66,7 @@ public class FragmentStackActivity extends Activity{
 					wrap.setId(id);
 					if(id!=last)
 						wrap.setVisibility(View.GONE);
-					content.addView(wrap);
+					content.addView(wrap, 0);
 					fragmentContainers.add(wrap);
 				}
 			}
@@ -116,7 +102,7 @@ public class FragmentStackActivity extends Activity{
 		}
 		final FrameLayout wrap=new FragmentContainer(this);
 		wrap.setId(generateViewId());
-		content.addView(wrap);
+		content.addView(wrap, 0);
 		fragmentContainers.add(wrap);
 		getFragmentManager().beginTransaction().add(wrap.getId(), fragment, "stackedFragment_"+wrap.getId()).commit();
 		getFragmentManager().executePendingTransactions();
@@ -468,6 +454,33 @@ public class FragmentStackActivity extends Activity{
 			if(fragment instanceof WindowInsetsAwareFragment waf){
 				post(()->invalidateSystemBarColors(waf));
 			}
+		}
+	}
+
+	private class FragmentStackContainer extends FrameLayout{
+
+		public FragmentStackContainer(@NonNull Context context){
+			super(context);
+			setChildrenDrawingOrderEnabled(true);
+		}
+
+		@Override
+		public WindowInsets onApplyWindowInsets(WindowInsets insets){
+			lastInsets=new WindowInsets(insets);
+			FragmentManager mgr=getFragmentManager();
+			for(int i=0;i<getChildCount();i++){
+				View child=getChildAt(i);
+				Fragment fragment=mgr.findFragmentById(child.getId());
+				if(fragment instanceof WindowInsetsAwareFragment wif){
+					wif.onApplyWindowInsets(new WindowInsets(insets));
+				}
+			}
+			return insets.consumeSystemWindowInsets();
+		}
+
+		@Override
+		protected int getChildDrawingOrder(int childCount, int drawingPosition){
+			return childCount-drawingPosition-1;
 		}
 	}
 }
