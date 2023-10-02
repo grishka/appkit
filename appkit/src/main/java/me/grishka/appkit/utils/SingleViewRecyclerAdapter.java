@@ -5,24 +5,24 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import me.grishka.appkit.FragmentStackActivity;
 
 public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRecyclerAdapter.ViewViewHolder>{
 
 	protected final View view;
 	protected final int id;
+	protected boolean createdViewHolder=false;
 
 	public SingleViewRecyclerAdapter(View view){
 		this.view=view;
-		if(view.getContext() instanceof FragmentStackActivity fsa)
-			id=fsa.generateViewId();
-		else
-			id=View.generateViewId();
+		id=View.generateViewId();
 	}
 
 	@NonNull
 	@Override
 	public ViewViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType){
+		if(createdViewHolder)
+			throw new IllegalStateException("Can only create one instance of the view holder. parent="+parent+", viewType="+viewType);
+		createdViewHolder=true;
 		return new ViewViewHolder(view);
 	}
 
