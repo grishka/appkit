@@ -10,7 +10,6 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 
 	protected final View view;
 	protected final int id;
-	protected boolean createdViewHolder=false;
 
 	public SingleViewRecyclerAdapter(View view){
 		this.view=view;
@@ -20,9 +19,6 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 	@NonNull
 	@Override
 	public ViewViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType){
-		if(createdViewHolder)
-			throw new IllegalStateException("Can only create one instance of the view holder. parent="+parent+", viewType="+viewType);
-		createdViewHolder=true;
 		return new ViewViewHolder(view);
 	}
 
