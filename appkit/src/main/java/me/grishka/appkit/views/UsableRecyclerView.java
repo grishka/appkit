@@ -542,15 +542,16 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		}
 
 		@Override
-		public void onShowPress(MotionEvent e){
-			showHighlight();
-		}
+		public void onShowPress(MotionEvent e){ }
 
 		@Override
 		public void onLongPress(MotionEvent e){
 			if(clickingViewHolder instanceof LongClickable && ((LongClickable) clickingViewHolder).onLongClick(e.getX()-clickingViewHolder.itemView.getX(), e.getY()-clickingViewHolder.itemView.getY())){
 				performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-				endClick();
+				postDelayed(UsableRecyclerView.this::endClick, 32);
+			}
+			if(!didHighlight){
+				showHighlight();
 			}
 		}
 
