@@ -93,17 +93,11 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		return new GridLayoutManager(getActivity(), getSpanCount());
 	}
 
-	@Override
-	public View onCreateContentView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState){
-		View view=inflater.inflate(listLayoutId, null);
-
-		list=view.findViewById(R.id.list);
-		emptyView=view.findViewById(R.id.empty);
+	protected void initializeEmptyView(View contentView){
+		emptyView=contentView.findViewById(R.id.empty);
 		if(emptyView instanceof ViewStub){
 			emptyView=((ViewStub) emptyView).inflate();
 		}
-		refreshLayout=view.findViewById(R.id.refresh_layout);
-		contentWrap=view.findViewById(R.id.content_wrap);
 		((TextView) emptyView.findViewById(R.id.empty_text)).setText(emptyText);
 		emptyButton=emptyView.findViewById(R.id.empty_button);
 		if(emptyButton!=null){
@@ -111,6 +105,16 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			emptyButton.setVisibility(emptyButtonVisible ? View.VISIBLE : View.GONE);
 			emptyButton.setOnClickListener(v->onEmptyViewBtnClick());
 		}
+	}
+
+	@Override
+	public View onCreateContentView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState){
+		View view=inflater.inflate(listLayoutId, null);
+
+		list=view.findViewById(R.id.list);
+		refreshLayout=view.findViewById(R.id.refresh_layout);
+		contentWrap=view.findViewById(R.id.content_wrap);
+		initializeEmptyView(view);
 
 		RecyclerView.LayoutManager lmgr=onCreateLayoutManager();
 		if(lmgr instanceof GridLayoutManager){
