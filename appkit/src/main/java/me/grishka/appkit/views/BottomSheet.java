@@ -146,8 +146,6 @@ public class BottomSheet extends Dialog{
 		container.requestLayout();
 	}
 
-	protected float
-
 	protected void onWindowInsetsUpdated(WindowInsets insets){}
 
 	private class ContainerView extends FrameLayout{
