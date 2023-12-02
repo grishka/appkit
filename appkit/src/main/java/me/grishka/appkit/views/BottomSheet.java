@@ -4,9 +4,11 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,11 +28,12 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import me.grishka.appkit.utils.CubicBezierInterpolator;
+import me.grishka.appkit.utils.V;
 
 public class BottomSheet extends Dialog{
 
-	private ContainerView container;
-	private View content;
+	protected ContainerView container;
+	protected View content;
 	private DisplayMetrics displayMetrics;
 	private boolean dismissed;
 	private Drawable navigationBarBackground;
@@ -45,6 +48,7 @@ public class BottomSheet extends Dialog{
 			object.invalidate();
 		}
 	};
+	protected float dimAmount=0.5f;
 
 	public BottomSheet(@NonNull Context context){
 		super(context);
@@ -67,7 +71,7 @@ public class BottomSheet extends Dialog{
 	public void setContentView(@NonNull View view){
 		view.setNestedScrollingEnabled(true);
 		container=new ContainerView(getContext());
-		container.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+		container.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
 		container.setClipToPadding(false);
 		content=view;
 		super.setContentView(container);
@@ -83,7 +87,7 @@ public class BottomSheet extends Dialog{
 		AnimatorSet set=new AnimatorSet();
 		set.playTogether(
 				ObjectAnimator.ofFloat(content, View.TRANSLATION_Y, height),
-				ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0.5f, 0),
+				ObjectAnimator.ofFloat(getWindow(), "dimAmount", dimAmount, 0),
 				ObjectAnimator.ofFloat(container, DUMMY_INVALIDATOR_PROPERTY, 1f, 0f)
 		);
 		set.setDuration(Math.max(60, (int) (180 * (height - content.getTranslationY()) / (float) height)));
@@ -103,12 +107,13 @@ public class BottomSheet extends Dialog{
 		content.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
 			@Override
 			public boolean onPreDraw(){
+				updateMargins();
 				content.getViewTreeObserver().removeOnPreDrawListener(this);
 				content.setTranslationY(content.getHeight());
 				AnimatorSet set=new AnimatorSet();
 				set.playTogether(
 						ObjectAnimator.ofFloat(content, View.TRANSLATION_Y, 0),
-						ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0, 0.5f),
+						ObjectAnimator.ofFloat(getWindow(), "dimAmount", 0, dimAmount),
 						ObjectAnimator.ofFloat(container, DUMMY_INVALIDATOR_PROPERTY, 1f, 0f)
 				);
 				set.setDuration(300);
@@ -126,6 +131,23 @@ public class BottomSheet extends Dialog{
 		}
 	}
 
+	protected void updateMargins(){
+		int width=Math.round(getWindow().getDecorView().getWidth()/displayMetrics.density);
+		FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams) content.getLayoutParams();
+		if(width>640+56+56){
+			lp.leftMargin=lp.rightMargin=V.dp(56);
+			lp.topMargin=V.dp(56);
+			lp.width=V.dp(640);
+		}else{
+			lp.leftMargin=lp.rightMargin=0;
+			lp.topMargin=V.dp(72);
+			lp.width=ViewGroup.LayoutParams.MATCH_PARENT;
+		}
+		container.requestLayout();
+	}
+
+	protected float
+
 	protected void onWindowInsetsUpdated(WindowInsets insets){}
 
 	private class ContainerView extends FrameLayout{
@@ -133,6 +155,7 @@ public class BottomSheet extends Dialog{
 		private float currentTranslationY=0;
 		private VelocityTracker velocityTracker;
 		private boolean isGestureNavigation;
+		private Rect tmpRect=new Rect();
 
 		public ContainerView(Context context) {
 			super(context);
@@ -237,7 +260,7 @@ public class BottomSheet extends Dialog{
 					canvas.save();
 					canvas.translate(0, content.getTranslationY());
 				}
-				navigationBarBackground.setBounds(0, getHeight()-getPaddingBottom(), getWidth(), getHeight());
+				navigationBarBackground.setBounds(content.getLeft(), getHeight()-getPaddingBottom(), content.getRight(), getHeight());
 				navigationBarBackground.draw(canvas);
 				if(isGestureNavigation)
 					canvas.restore();
@@ -246,11 +269,20 @@ public class BottomSheet extends Dialog{
 
 		@Override
 		public boolean onTouchEvent(MotionEvent event){
-			if(event.getAction()==MotionEvent.ACTION_DOWN && event.getY()<content.getTop()){
-				dismiss();
+			if(event.getAction()==MotionEvent.ACTION_DOWN){
+				content.getHitRect(tmpRect);
+				if(!tmpRect.contains((int)event.getX(), (int)event.getY())){
+					dismiss();
+				}
 				return true;
 			}
 			return super.onTouchEvent(event);
+		}
+
+		@Override
+		protected void onSizeChanged(int w, int h, int oldw, int oldh){
+			super.onSizeChanged(w, h, oldw, oldh);
+			updateMargins();
 		}
 	}
 
