@@ -35,7 +35,7 @@ public class BottomSheet extends Dialog{
 	protected ContainerView container;
 	protected View content;
 	private DisplayMetrics displayMetrics;
-	private boolean dismissed;
+	protected boolean dismissed;
 	private Drawable navigationBarBackground;
 	private static final Property<View, Float> DUMMY_INVALIDATOR_PROPERTY=new Property<View, Float>(Float.class, "dummy"){
 		@Override
@@ -70,6 +70,7 @@ public class BottomSheet extends Dialog{
 	@Override
 	public void setContentView(@NonNull View view){
 		view.setNestedScrollingEnabled(true);
+		view.setClipToOutline(true);
 		container=new ContainerView(getContext());
 		container.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
 		container.setClipToPadding(false);
@@ -148,7 +149,7 @@ public class BottomSheet extends Dialog{
 
 	protected void onWindowInsetsUpdated(WindowInsets insets){}
 
-	private class ContainerView extends FrameLayout{
+	protected class ContainerView extends FrameLayout{
 
 		private float currentTranslationY=0;
 		private VelocityTracker velocityTracker;
