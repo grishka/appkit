@@ -406,6 +406,9 @@ public class ImageCache{
 							decoder.setTargetSize(Math.round(req.desiredMaxHeight/(float)h*w), req.desiredMaxHeight);
 						}
 					}
+					if(req.desiredConfig!=Bitmap.Config.HARDWARE){
+						decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+					}
 				});
 			}else{
 				boolean isAnimatedGif=false;
