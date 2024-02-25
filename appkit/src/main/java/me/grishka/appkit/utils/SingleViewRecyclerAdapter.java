@@ -37,6 +37,13 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 		return id;
 	}
 
+	@Override
+	public String toString(){
+		return "SingleViewRecyclerAdapter{"+
+				"view="+view+
+				'}';
+	}
+
 	public static class ViewViewHolder extends RecyclerView.ViewHolder{
 		public ViewViewHolder(@NonNull View itemView){
 			super(itemView);

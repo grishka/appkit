@@ -163,6 +163,13 @@ public class MergeRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.View
 		return getAdapterForPosition(position).getItemId(getAdapterPosition(position));
 	}
 
+	@Override
+	public String toString(){
+		return "MergeRecyclerAdapter{"+
+				"adapters="+adapters+
+				'}';
+	}
+
 	private class InternalDataObserver extends RecyclerView.AdapterDataObserver{
 
 		private RecyclerView.Adapter adapter;
