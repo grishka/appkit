@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
-import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,10 +19,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
-import android.widget.Adapter;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.BaseAdapter;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
@@ -33,6 +30,7 @@ import java.util.List;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.LayoutRes;
+import me.grishka.appkit.FragmentStackActivity;
 import me.grishka.appkit.R;
 import me.grishka.appkit.utils.StubListAdapter;
 import me.grishka.appkit.utils.V;
@@ -560,6 +558,16 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 
 	protected void onHidden(){
 
+	}
+
+	protected void addBackCallback(Runnable callback){
+		if(getActivity() instanceof FragmentStackActivity fsa)
+			fsa.addBackCallback(callback);
+	}
+
+	protected void removeBackCallback(Runnable callback){
+		if(getActivity() instanceof FragmentStackActivity fsa)
+			fsa.removeBackCallback(callback);
 	}
 
 	protected class NavigationSpinnerAdapter extends ArrayAdapter {

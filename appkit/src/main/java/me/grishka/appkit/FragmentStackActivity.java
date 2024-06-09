@@ -21,6 +21,8 @@ import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import java.util.ArrayList;
 
@@ -28,7 +30,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import me.grishka.appkit.fragments.AppKitFragment;
 import me.grishka.appkit.fragments.CustomTransitionsFragment;
-import me.grishka.appkit.fragments.OnBackPressedListener;
 import me.grishka.appkit.fragments.WindowInsetsAwareFragment;
 import me.grishka.appkit.utils.CubicBezierInterpolator;
 import me.grishka.appkit.utils.V;
@@ -43,6 +44,8 @@ public class FragmentStackActivity extends Activity{
 	private ArrayList<Integer> pendingFragmentRemovals=new ArrayList<>();
 	private ArrayList<Fragment> pendingFragmentAdditions=new ArrayList<>();
 	private int nextViewID=1;
+	private Object stackOnBackInvokedCallback;
+	private ArrayList<BackCallbackRecord> fragmentBackCallbacks=new ArrayList<>();
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -56,10 +59,14 @@ public class FragmentStackActivity extends Activity{
 		getWindow().setStatusBarColor(0);
 		getWindow().setNavigationBarColor(0);
 
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+			stackOnBackInvokedCallback=(OnBackInvokedCallback) this::onPredictiveBackInvoked;
+		}
+
 		if(savedInstanceState!=null){
 			nextViewID=savedInstanceState.getInt("appkit:nextGeneratedViewID", 1);
 			int[] ids=savedInstanceState.getIntArray("appkit:fragmentContainerIDs");
-			if(ids.length>0){
+			if(ids!=null && ids.length>0){
 				int last=ids[ids.length-1];
 				for(int id : ids){
 					FrameLayout wrap=new FragmentContainer(this);
@@ -69,6 +76,8 @@ public class FragmentStackActivity extends Activity{
 					content.addView(wrap, 0);
 					fragmentContainers.add(wrap);
 				}
+				if(ids.length>1)
+					addPredictiveBackCallback();
 			}
 		}
 
@@ -102,6 +111,8 @@ public class FragmentStackActivity extends Activity{
 		}
 		final FrameLayout wrap=new FragmentContainer(this);
 		wrap.setId(generateViewId());
+		if(!fragmentContainers.isEmpty())
+			addPredictiveBackCallback();
 		content.addView(wrap, 0);
 		fragmentContainers.add(wrap);
 		getFragmentManager().beginTransaction().add(wrap.getId(), fragment, "stackedFragment_"+wrap.getId()).commit();
@@ -193,6 +204,7 @@ public class FragmentStackActivity extends Activity{
 		getFragmentManager().executePendingTransactions();
 		fragmentContainers.clear();
 		content.removeAllViews();
+		removePredictiveBackCallback();
 		showFragment(fragment);
 	}
 
@@ -208,6 +220,8 @@ public class FragmentStackActivity extends Activity{
 				finish();
 				return;
 			}
+			if(fragmentContainers.size()==1)
+				removePredictiveBackCallback();
 			final Fragment fragment=getFragmentManager().findFragmentById(wrap.getId());
 			FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-1);
 			Fragment prevFragment=getFragmentManager().findFragmentById(prevWrap.getId());
@@ -289,16 +303,23 @@ public class FragmentStackActivity extends Activity{
 
 	@Override
 	public void onBackPressed(){
-		if(!fragmentContainers.isEmpty()){
+		if(!fragmentBackCallbacks.isEmpty()){
+			fragmentBackCallbacks.get(fragmentBackCallbacks.size()-1).callback.run();
+			return;
+		}
+		if(fragmentContainers.size()>1){
 			Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
-			if(currentFragment instanceof OnBackPressedListener && ((OnBackPressedListener) currentFragment).onBackPressed())
-				return;
-			if(fragmentContainers.size()>1){
-				removeFragment(currentFragment, true);
-				return;
-			}
+			removeFragment(currentFragment, true);
+			return;
 		}
 		super.onBackPressed();
+	}
+
+	private void onPredictiveBackInvoked(){
+		if(fragmentContainers.size()>1){
+			Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
+			removeFragment(currentFragment, true);
+		}
 	}
 
 	@Override
@@ -429,6 +450,48 @@ public class FragmentStackActivity extends Activity{
 		blockInputEvents=false;
 	}
 
+	private void addPredictiveBackCallback(){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+			getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, (OnBackInvokedCallback) stackOnBackInvokedCallback);
+		}
+	}
+
+	private void removePredictiveBackCallback(){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+			getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((OnBackInvokedCallback) stackOnBackInvokedCallback);
+		}
+	}
+
+	public void addBackCallback(Runnable callback){
+		for(BackCallbackRecord bcr:fragmentBackCallbacks){
+			if(bcr.callback==callback){
+				fragmentBackCallbacks.remove(bcr);
+				if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+					getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((OnBackInvokedCallback) bcr.nativeCallback);
+				}
+				break;
+			}
+		}
+		BackCallbackRecord bcr=new BackCallbackRecord(callback);
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+			bcr.nativeCallback=(OnBackInvokedCallback) callback::run;
+			getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, (OnBackInvokedCallback) bcr.nativeCallback);
+		}
+		fragmentBackCallbacks.add(bcr);
+	}
+
+	public void removeBackCallback(Runnable callback){
+		for(BackCallbackRecord bcr:fragmentBackCallbacks){
+			if(bcr.callback==callback){
+				fragmentBackCallbacks.remove(bcr);
+				if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+					getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((OnBackInvokedCallback) bcr.nativeCallback);
+				}
+				break;
+			}
+		}
+	}
+
 	public int generateViewId(){
 		int r=nextViewID;
 		nextViewID++;
@@ -481,6 +544,15 @@ public class FragmentStackActivity extends Activity{
 		@Override
 		protected int getChildDrawingOrder(int childCount, int drawingPosition){
 			return childCount-drawingPosition-1;
+		}
+	}
+
+	private static class BackCallbackRecord{
+		public Runnable callback;
+		public Object nativeCallback;
+
+		public BackCallbackRecord(Runnable callback){
+			this.callback=callback;
 		}
 	}
 }
