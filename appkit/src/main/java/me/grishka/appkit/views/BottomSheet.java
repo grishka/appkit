@@ -102,6 +102,13 @@ public class BottomSheet extends Dialog{
 		set.start();
 	}
 
+	public void dismissWithoutAnimation(){
+		if(dismissed)
+			return;
+		dismissed=true;
+		super.dismiss();
+	}
+
 	@Override
 	public void show(){
 		super.show();
@@ -123,6 +130,11 @@ public class BottomSheet extends Dialog{
 				return true;
 			}
 		});
+	}
+
+	public void showWithoutAnimation(){
+		super.show();
+		getWindow().setDimAmount(dimAmount);
 	}
 
 	public void setNavigationBarBackground(Drawable drawable, boolean useLightNavbar){
