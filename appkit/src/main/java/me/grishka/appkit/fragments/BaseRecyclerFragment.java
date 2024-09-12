@@ -23,7 +23,6 @@ import me.grishka.appkit.api.ErrorResponse;
 import me.grishka.appkit.api.PaginatedList;
 import me.grishka.appkit.imageloader.ListImageLoaderAdapter;
 import me.grishka.appkit.imageloader.ListImageLoaderWrapper;
-import me.grishka.appkit.imageloader.RecyclerViewDelegate;
 import me.grishka.appkit.utils.Preloader;
 import me.grishka.appkit.utils.V;
 import me.grishka.appkit.views.EmptyViewCapable;
@@ -169,10 +168,10 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 			refreshLayout.setOnRefreshListener(this);
 			refreshLayout.setEnabled(refreshEnabled);
 		}
-		if(list instanceof EmptyViewCapable)
-			((EmptyViewCapable) list).setEmptyView(emptyView);
-		if(list instanceof ListImageLoaderAdapter){
-			imgLoader=new ListImageLoaderWrapper(getActivity(), (ListImageLoaderAdapter) list, new RecyclerViewDelegate(list), this);
+		if(list instanceof EmptyViewCapable evc)
+			evc.setEmptyView(emptyView);
+		if(list instanceof ListImageLoaderAdapter adapter){
+			imgLoader=new ListImageLoaderWrapper(getActivity(), adapter, list, this);
 		}
 
 		return view;

@@ -129,6 +129,14 @@ public class ListImageLoader {
 			}
 		}
 	}
+
+	public synchronized void offsetRange(int start, int end, int amount){
+		for(RunnableTask r:incomplete){
+			if(r.item>=start && r.item<end){
+				r.item+=amount;
+			}
+		}
+	}
 	
 	public synchronized void cancelRange(int start, int end){
 		Iterator<RunnableTask> itr=incomplete.iterator();
@@ -237,9 +245,11 @@ public class ListImageLoader {
 									synchronized(ListImageLoader.this){
 										loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
 									}
-									// TODO handle partial adapter updates better
-									if(item<adapter.getCount() && image<adapter.getImageCountForItem(item) && req.equals(adapter.getImageRequest(item, image)))
+									ImageLoaderRequest adapterReq=null;
+									if(item<adapter.getCount() && image<adapter.getImageCountForItem(item) && req.equals(adapterReq=adapter.getImageRequest(item, image)))
 										adapter.imageLoaded(item, image, bmp);
+									else
+										Log.w(TAG, "What we just loaded does not match what the adapter expects for item "+item+", image "+image+". Actual request "+adapterReq+", expected "+req);
 								}
 								if(DEBUG) Log.v(TAG, "Completed [UI thread]: "+RunnableTask.this);
 							});

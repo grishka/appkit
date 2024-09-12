@@ -1,73 +1,31 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
-import android.database.DataSetObserver;
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewTreeObserver;
-import android.widget.AbsListView;
-import android.widget.AdapterView;
 import android.widget.ImageView;
-import android.widget.ListView;
 
-import java.lang.reflect.Method;
+import java.util.Objects;
 
 import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
-public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
+public class ListImageLoaderWrapper{
 
 	private ListImageLoader imgLoader;
-	private ListViewDelegate list;
+	private RecyclerView list;
 	private Listener listener;
 	private int viStart, viCount;
-	private AbsListView.OnScrollListener scrollListener;
 	private boolean lastScrollFwd=false;
 	private int prevVisLast, prevVisFirst;
 	private long lastChangeTime=0;
 	private boolean wasFastScrolling=false;
 	private Runnable loadRunnable;
 	private Runnable scrollStopRunnable;
-	private boolean isScrolling=false;
 	private Context context;
-	private ViewTreeObserver.OnPreDrawListener preDrawListener=new ViewTreeObserver.OnPreDrawListener() {
-		double prevPos;
-		@Override
-		public boolean onPreDraw() {
-			if(list.getVisibleItemCount()>0){
-				double pos=list.getFirstVisiblePosition();
-				View topItem=null;
-				for(int i=0;i<list.getVisibleItemCount();i++){
-					topItem=list.getItemView(i + list.getFirstVisiblePosition());
-					//Log.i(TAG, "Item "+i+", "+topItem);
-					if(topItem==null) continue;
-					//Log.i(TAG, "Height = "+topItem.getHeight());
-					if(topItem.getHeight()>0) break;
-				}
-				if(topItem==null) return true;
-				if(list.isVertical())
-					pos+=Math.abs((topItem.getHeight()-topItem.getTop())/(double)topItem.getHeight());
-				else
-					pos+=Math.abs((topItem.getWidth()-topItem.getLeft())/(double)topItem.getWidth());
-				if(pos!=prevPos){
-					isScrolling=true;
-					//Log.d("appkit", "ScrollPos = "+pos);
-					if(scrollStopRunnable!=null){
-						list.getView().removeCallbacks(scrollStopRunnable);
-						scrollStopRunnable=null;
-					}
-					if(isScrolling){
-						scrollStopRunnable=new ScrollStopDetector();
-						list.getView().postDelayed(scrollStopRunnable, 150);
-					}
-				}
-				prevPos=pos;
-			}
-			return true;
-		}
-	};
 	private DataSetObserver observer=new DataSetObserver(){
 		@Override
 		public void onEverythingChanged(){
@@ -81,8 +39,19 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 
 		@Override
 		public void onItemRangeInserted(int position, int count){
-			//reloadRange(position, count);
-			onEverythingChanged();
+			imgLoader.offsetRange(position+count, list.getLayoutManager().getItemCount(), count);
+			reloadRange(position, count);
+		}
+	};
+	private RecyclerView.OnScrollListener scrollListener=new RecyclerView.OnScrollListener(){
+		@Override
+		public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState){
+			realScrollStateChanged(newState);
+		}
+
+		@Override
+		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy){
+			onScroll(getFirstVisiblePosition(), getVisibleItemCount(), list.getLayoutManager().getItemCount());
 		}
 	};
 	private float prefetchScreens=1;
@@ -90,18 +59,13 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	
 	private static final String TAG="appkit-img-wrapper";
 
-	public ListImageLoaderWrapper(Context context, ListImageLoaderAdapter adapter, AdapterView<?> listView, Listener listener){
-		this(context, adapter, new DefaultListViewDelegate(listView), listener);
-	}
-
-	public ListImageLoaderWrapper(Context context, ListImageLoaderAdapter adapter, ListViewDelegate listView, Listener listener){
+	public ListImageLoaderWrapper(Context context, ListImageLoaderAdapter adapter, RecyclerView listView, Listener listener){
 		imgLoader=new ListImageLoader();
 		imgLoader.setAdapter(adapter);
 		this.listener=listener;
 		this.context=context;
 		list=listView;
-		list.setOnScrollListener(this);
-		listView.getView().getViewTreeObserver().addOnPreDrawListener(preDrawListener);
+		list.addOnScrollListener(scrollListener);
 		ImageCache.getInstance(context).registerLoader(this);
 		if(adapter instanceof ObservableListImageLoaderAdapter)
 			((ObservableListImageLoaderAdapter)adapter).addDataSetObserver(observer);
@@ -116,28 +80,18 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 			((ObservableListImageLoaderAdapter)adapter).addDataSetObserver(observer);
 	}
 
-	public void setListView(AdapterView<?> listView){
-		setListView(new DefaultListViewDelegate(listView));
-	}
-
-	public void setListView(ListViewDelegate listView){
+	public void setListView(RecyclerView listView){
 		if(list!=null){
-			list.setOnScrollListener(null);
+			list.removeOnScrollListener(scrollListener);
 			if(scrollStopRunnable!=null){
-				list.getView().removeCallbacks(scrollStopRunnable);
+				list.removeCallbacks(scrollStopRunnable);
 				scrollStopRunnable=null;
 			}
-			list.getView().getViewTreeObserver().removeOnPreDrawListener(preDrawListener);
 		}
 		list=listView;
-		list.setOnScrollListener(this);
-		listView.getView().getViewTreeObserver().addOnPreDrawListener(preDrawListener);
+		list.addOnScrollListener(scrollListener);
 	}
-	
-	public void setOnScrollListener(AbsListView.OnScrollListener sl){
-		scrollListener=sl;
-	}
-	
+
 	public void updateImages(){
 		if(wasFastScrolling)
 			return;
@@ -153,24 +107,44 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 				doUpdateImages();
 			}
 		};
-		list.getView().getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+		list.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
 			@Override
 			public boolean onPreDraw() {
-				list.getView().getViewTreeObserver().removeOnPreDrawListener(this);
+				list.getViewTreeObserver().removeOnPreDrawListener(this);
 				r.run();
 				return true;
 			}
 		});
-		list.getView().postDelayed(r, 100);
+		list.postDelayed(r, 100);
 	}
 
 	public void forceUpdateImages(){
 		doUpdateImages();
 	}
 
+	private int getFirstVisiblePosition(){
+		RecyclerView.LayoutManager lm=Objects.requireNonNull(list.getLayoutManager());
+		if(lm.getChildCount()==0)
+			return 0;
+		View topChild=lm.getChildAt(0);
+		return list.getChildAdapterPosition(topChild);
+	}
+
+	private int getLastVisiblePosition(){
+		RecyclerView.LayoutManager lm=Objects.requireNonNull(list.getLayoutManager());
+		int count=lm.getChildCount();
+		if(count==0)
+			return 0;
+		return list.getChildAdapterPosition(lm.getChildAt(count-1));
+	}
+
+	private int getVisibleItemCount(){
+		return list.getLayoutManager().getChildCount();
+	}
+
 	private void reloadRange(int position, int count){
-		int posMin=list.getFirstVisiblePosition()-Math.round(list.getVisibleItemCount()*prefetchScreens);
-		int posMax=list.getLastVisiblePosition()+Math.round(list.getVisibleItemCount()*prefetchScreens);
+		int posMin=getFirstVisiblePosition()-Math.round(getVisibleItemCount()*prefetchScreens);
+		int posMax=getLastVisiblePosition()+Math.round(getVisibleItemCount()*prefetchScreens);
 		if(position+count<posMin || position>posMax) return;
 		int start=Math.max(posMin, position);
 		int end=Math.min(posMax, position+count);
@@ -178,17 +152,16 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	}
 	
 	private void doUpdateImages(){
-		isScrolling=false;
 		//imgLoader.setIsScrolling(isOuterScrolling);
 		imgLoader.setIsScrolling(false);
-		viStart=list.getFirstVisiblePosition();
-		viCount=list.getLastVisiblePosition()-viStart;
-		if(viCount<=0) viCount=Math.max(5, list.getLastVisiblePosition()-list.getFirstVisiblePosition());
+		viStart=getFirstVisiblePosition();
+		viCount=getLastVisiblePosition()-viStart;
+		if(viCount<=0) viCount=Math.max(5, getLastVisiblePosition()-getFirstVisiblePosition());
 		//Log.d(TAG, "Update images: load "+(viStart-getNumHeaders())+" - "+(viStart+viCount-getNumHeaders()));
 		imgLoader.preparePartialCancel();
-		imgLoader.loadRange(viStart-getNumHeaders(), viStart+viCount-getNumHeaders(), context);
+		imgLoader.loadRange(viStart, viStart+viCount, context);
 		imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-		imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+		imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 		imgLoader.commitPartialCancel();
 	}
 
@@ -196,8 +169,7 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		if(isActive)
 			return;
 		if(list!=null){
-			list.getView().getViewTreeObserver().addOnPreDrawListener(preDrawListener);
-			reloadRange(list.getFirstVisiblePosition(), list.getVisibleItemCount());
+			reloadRange(getFirstVisiblePosition(), getVisibleItemCount());
 		}
 		isActive=true;
 	}
@@ -206,9 +178,6 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		if(!isActive)
 			return;
 		imgLoader.cancelAll();
-		if (list != null) {
-			list.getView().getViewTreeObserver().removeOnPreDrawListener(preDrawListener);
-		}
 		isActive=false;
 	}
 	
@@ -221,9 +190,9 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 	}
 
 	public interface Listener{
-		public void onScrolledToLastItem();
-		public void onScrollStarted();
-		public void onScrollStopped();
+		void onScrolledToLastItem();
+		void onScrollStarted();
+		void onScrollStopped();
 	}
 	
 	public interface ExtendedListener extends Listener{
@@ -234,11 +203,9 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 		prefetchScreens=screens;
 	}
 
-	@Override
-	public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+	public void onScroll(int firstVisibleItem, int visibleItemCount, int totalItemCount) {
 		if(!isActive)
 			return;
-		if(scrollListener!=null) scrollListener.onScroll(view, firstVisibleItem, visibleItemCount, totalItemCount);
 		if(viStart!=firstVisibleItem)
 			lastScrollFwd=viStart<firstVisibleItem;
 		viCount=visibleItemCount;
@@ -253,14 +220,14 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 					//imgLoader.setIsScrolling(true);
 					imgLoader.setIsScrolling(false);
 					wasFastScrolling=false;
-					int lastVisiblePos=list.getLastVisiblePosition();
+					int lastVisiblePos=getLastVisiblePosition();
 					if(lastVisiblePos>=0){
-						imgLoader.loadRange(list.getFirstVisiblePosition()-getNumHeaders(), lastVisiblePos, context);
+						imgLoader.loadRange(getFirstVisiblePosition(), lastVisiblePos, context);
 						if(lastScrollFwd){
 							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-							imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+							imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 						}else{
-							imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+							imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
 						}
 					}
@@ -294,72 +261,50 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 
 		if(firstVisibleItem+visibleItemCount>=totalItemCount-1 && visibleItemCount!=0 && totalItemCount!=0){
 			if(listener!=null){
-				list.getView().post(listener::onScrolledToLastItem);
+				list.post(listener::onScrolledToLastItem);
 			}
 		}
-		if(listener!=null && listener instanceof ExtendedListener){
-			((ExtendedListener) listener).onScroll(firstVisibleItem-getNumHeaders(), visibleItemCount, totalItemCount-getNumHeaders()-getNumFooters());
+		if(listener!=null && listener instanceof ExtendedListener xl){
+			xl.onScroll(firstVisibleItem, visibleItemCount, totalItemCount);
 		}
 	}
 
-	@Override
-	public void onScrollStateChanged(AbsListView view, int scrollState) {
-		//Log.i(TAG, "Scroll state changed: "+scrollState);
-		if(!isActive)
-			return;
-		if(scrollState!=SCROLL_STATE_IDLE){
-			realScrollStateChanged(scrollState);
-			isScrolling=true;
-		}
-	}
-	
 	public void callScrolledToLastItem(){
 		if(listener!=null) listener.onScrolledToLastItem();
 	}
 	
 	private void realScrollStateChanged(int scrollState){
+		if(!isActive)
+			return;
 		//Log.d("appkit", "scroll state changed "+scrollState);
-		if(scrollState==SCROLL_STATE_IDLE && listener!=null) listener.onScrollStopped();
-		if(scrollState==SCROLL_STATE_TOUCH_SCROLL && listener!=null) listener.onScrollStarted();
+		if(scrollState==RecyclerView.SCROLL_STATE_IDLE && listener!=null) listener.onScrollStopped();
+		if(scrollState==RecyclerView.SCROLL_STATE_DRAGGING && listener!=null) listener.onScrollStarted();
 		/*if(scrollState==SCROLL_STATE_TOUCH_SCROLL){
 			imgLoader.cancelAll();
 		}*/
-		if(scrollListener!=null) scrollListener.onScrollStateChanged(list.getView() instanceof AbsListView ? ((AbsListView)list.getView()) : null, scrollState);
-		if(scrollState==SCROLL_STATE_IDLE/* && wasFastScrolling*/){
+		if(scrollState==RecyclerView.SCROLL_STATE_IDLE/* && wasFastScrolling*/){
 			imgLoader.setIsScrolling(false);
 			//Log.w(TAG, "Scroll state idle, loading");
 			wasFastScrolling=false;
 			if(viCount<=0)
 				return;
 			imgLoader.preparePartialCancel();
-			imgLoader.loadRange(viStart-getNumHeaders(), viStart+viCount, context);
+			imgLoader.loadRange(viStart, viStart+viCount, context);
 			if(lastScrollFwd){
 				imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-				imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+				imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 			}else{
-				imgLoader.loadRange(viStart-getNumHeaders()-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+				imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
 				imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
 			}
 			imgLoader.commitPartialCancel();
 		}else{
 			if(loadRunnable!=null){
-				list.getView().removeCallbacks(loadRunnable);
+				list.removeCallbacks(loadRunnable);
 				loadRunnable=null;
 			}
 			//imgLoader.setIsScrolling(true);
 		}
-	}
-	
-	private int getNumHeaders(){
-		if(list instanceof ListView)
-			return ((ListView)list).getHeaderViewsCount();
-		return 0;
-	}
-	
-	private int getNumFooters(){
-		if(list instanceof ListView)
-			return ((ListView)list).getFooterViewsCount();
-		return 0;
 	}
 
 	public void bindImageView(ImageView view, @DrawableRes int placeholderRes, ImageLoaderRequest req){
@@ -387,85 +332,6 @@ public class ListImageLoaderWrapper implements AbsListView.OnScrollListener{
 
 	/*package*/ void onCacheEntryRemoved(String key){
 		imgLoader.onCacheEntryRemoved(key);
-	}
-	
-	/*public AdapterView<?> getListView(){
-		return list;
-	}*/
-	
-	private class ScrollStopDetector implements Runnable{
-		@Override
-		public void run() {
-			//Log.e("appkit", "============ scroll stop");
-			realScrollStateChanged(AbsListView.OnScrollListener.SCROLL_STATE_IDLE);
-			isScrolling=false;
-			scrollStopRunnable=null;
-		}
-	}
-
-	public interface ListViewDelegate{
-		int getVisibleItemCount();
-		int getFirstVisiblePosition();
-		int getLastVisiblePosition();
-		View getView();
-		View getItemView(int index);
-		void setOnScrollListener(AbsListView.OnScrollListener listener);
-		boolean isVertical();
-	}
-
-	public static class DefaultListViewDelegate implements ListViewDelegate{
-
-		private AdapterView<?> adapterView;
-
-		public DefaultListViewDelegate(AdapterView<?> l){
-			adapterView=l;
-		}
-
-		@Override
-		public int getVisibleItemCount() {
-			return adapterView.getChildCount();
-		}
-
-		@Override
-		public int getFirstVisiblePosition() {
-			return adapterView.getFirstVisiblePosition();
-		}
-
-		@Override
-		public int getLastVisiblePosition() {
-			return adapterView.getLastVisiblePosition();
-		}
-
-		@Override
-		public View getView() {
-			return adapterView;
-		}
-
-		@Override
-		public View getItemView(int index) {
-			if(index<adapterView.getFirstVisiblePosition() || index>adapterView.getLastVisiblePosition())
-				return null;
-			return adapterView.getChildAt(index-adapterView.getFirstVisiblePosition());
-		}
-
-		@Override
-		public void setOnScrollListener(AbsListView.OnScrollListener listener) {
-			if(adapterView instanceof AbsListView)
-				((AbsListView)adapterView).setOnScrollListener(listener);
-			else{
-				try{
-					Class<?> c=adapterView.getClass();
-					Method m=c.getMethod("setOnScrollListener", AbsListView.OnScrollListener.class);
-					if(m!=null) m.invoke(adapterView, listener);
-				}catch(Exception x){
-					Log.w("appkit", x);}
-			}
-		}
-
-		@Override
-		public boolean isVertical(){
-			return true;
-		}
 	}
 
 	public interface DataSetObserver{
