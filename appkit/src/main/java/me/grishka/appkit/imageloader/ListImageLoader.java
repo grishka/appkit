@@ -188,6 +188,10 @@ public class ListImageLoader {
 		failedRequests.clear();
 	}
 
+	public synchronized boolean isFailed(int item, int image){
+		return failedRequests.contains(makeIndex(item, image));
+	}
+
 	public synchronized void retryFailedRequests(Context context){
 		if(DEBUG) Log.i(TAG, "Retrying failed requests");
 		Set<Integer> failedRequests=this.failedRequests.stream().map(ListImageLoader::getPosition).collect(Collectors.toSet());

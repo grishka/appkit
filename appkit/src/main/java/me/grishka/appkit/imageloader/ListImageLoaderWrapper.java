@@ -1,6 +1,7 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
+import android.database.DataSetObserver;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -325,10 +326,13 @@ public class ListImageLoaderWrapper{
 			return;
 		for(int i=0;i<adapter.getImageCountForItem(position);i++){
 			ImageLoaderRequest req=adapter.getImageRequest(position, i);
-			if(isAlreadyLoaded(req))
+			if(isAlreadyLoaded(req)){
 				holder.setImage(i, get(req));
-			else
+			}else{
 				holder.clearImage(i);
+				if(imgLoader.isFailed(position, i))
+					holder.onImageLoadingFailed(i, null);
+			}
 		}
 	}
 
