@@ -6,9 +6,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Vector;
 
 import androidx.collection.LongSparseArray;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
@@ -19,10 +18,9 @@ public class ListImageLoader {
 	private static final String TAG="appkit-img-loader";
 
 	private volatile ListImageLoaderAdapter adapter;
-	private final Vector<RunnableTask> incomplete=new Vector<>();
+	private final ArrayList<RunnableTask> incomplete=new ArrayList<>();
 	private boolean isScrolling;
 	private final Handler mainThreadHandler;
-	private final LinkedList<RunnableTask> reusableTasks=new LinkedList<>();
 	private final LongSparseArray<String> loadedRequests=new LongSparseArray<>(10);
 	private LongSparseArray<RunnableTask> pendingPartialCancel;
 
@@ -57,7 +55,7 @@ public class ListImageLoader {
 		}catch(Exception x){Log.w("appkit", x);}
 	}
 	
-	public synchronized void loadSingleItem(int item, Context context, boolean force){
+	public void loadSingleItem(int item, Context context, boolean force){
 		try{
 			if(DEBUG) Log.v(TAG, "loadItem: "+item);
 			int cnt=adapter.getImageCountForItem(item);
@@ -83,7 +81,7 @@ public class ListImageLoader {
 						loadedRequests.remove(makeIndex(item, i));
 					}
 				}
-				RunnableTask task=createTask();
+				RunnableTask task=new RunnableTask();
 				task.canceled=false;
 				task.item=item;
 				task.image=i;
@@ -92,34 +90,13 @@ public class ListImageLoader {
 				task.set=true;
 				task.context=context;
 				if(DEBUG) Log.v(TAG, "Added task: "+task);
-				incomplete.add(task);
-				if(ImageCache.getInstance(task.context).isInCache(task.req)) {
-					ImageLoaderThreadPool.enqueueCachedTask(task);
-				}else {
-					ImageLoaderThreadPool.enqueueTask(task);
+				synchronized(this){
+					incomplete.add(task);
 				}
+				task.run();
 			}
 		}catch(Exception x){
 			if(DEBUG) Log.w(TAG, x);
-		}
-	}
-
-	private RunnableTask createTask(){
-		synchronized(reusableTasks){
-			if(reusableTasks.size()>0){
-				if(DEBUG) Log.v(TAG, "Reusing existing task");
-				return reusableTasks.remove(0);
-			}
-		}
-		if(DEBUG) Log.w(TAG, "Creating new task");
-		return new RunnableTask();
-	}
-
-	private void reuseTask(RunnableTask task){
-		synchronized(reusableTasks){
-			if(DEBUG && reusableTasks.contains(task))
-				throw new IllegalStateException("task "+task+" already reused");
-			reusableTasks.add(task);
 		}
 	}
 
@@ -218,7 +195,7 @@ public class ListImageLoader {
 	}
 
 	private static int getImage(long index){
-		return (int)(index & 0xFFFFFFFF);
+		return (int)index;
 	}
 
 	/*package*/ synchronized void onCacheEntryRemoved(String key){
@@ -235,68 +212,52 @@ public class ListImageLoader {
 		public ImageLoaderRequest req;
 		public boolean canceled=false;
 		public boolean set=true;
-		private ImageCache.RequestWrapper reqWrapper;
 		public Context context;
+		private ImageCache.PendingImageRequest pendingRequest;
 
 		public void cancel(){
 			if(DEBUG) Log.i(TAG, "Cancel: "+this);
 			canceled=true;
-			ImageLoaderThreadPool.enqueueCancellation(new Runnable() {
-				@Override
-				public void run() {
-					try {
-						if (reqWrapper != null) {
-							reqWrapper.cancel();
-						}
-					} catch (Exception x) {
-					}
-				}
-			});
+			if(pendingRequest!=null)
+				pendingRequest.cancel();
 		}
 		
 		public void run(){
 			if(canceled){
-				reuseTask(this);
 				return;
 			}
 			try{
 				if(DEBUG) Log.v(TAG, "Started: "+this);
-				reqWrapper=new ImageCache.RequestWrapper();
-				Drawable _bmp=ImageCache.getInstance(context).get(req, reqWrapper, null, set);
-				if(set && _bmp==null)
-					Log.w(TAG, "error downloading image: "+req);
-				if(canceled){
-					if(DEBUG) Log.w(TAG, "_Canceled: "+this);
-					reuseTask(this);
-					return;
-				}
-				if(DEBUG && set && _bmp==null) Log.e(TAG, "FAILED: "+this);
-				if(set && _bmp!=null && !canceled) {
-					final Drawable bmp=_bmp;
-					mainThreadHandler.post(new Runnable() {
-						@Override
-						public void run() {
-							if(set && !canceled){
-								synchronized(ListImageLoader.this){
-									loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
+				pendingRequest=ImageCache.getInstance(context).get(req, null, new ImageLoaderCallback(){
+					@Override
+					public void onImageLoaded(ImageLoaderRequest req, Drawable bmp){
+						if(set){
+							mainThreadHandler.post(()->{
+								if(set && !canceled){
+									synchronized(ListImageLoader.this){
+										loadedRequests.put(makeIndex(item, image), req.getMemoryCacheKey());
+									}
+									// TODO handle partial adapter updates better
+									if(item<adapter.getCount() && image<adapter.getImageCountForItem(item) && req.equals(adapter.getImageRequest(item, image)))
+										adapter.imageLoaded(item, image, bmp);
 								}
-								// TODO handle partial adapter updates better
-								if(item<adapter.getCount() && image<adapter.getImageCountForItem(item) && req.equals(adapter.getImageRequest(item, image)))
-									adapter.imageLoaded(item, image, bmp);
-							}
-							if(DEBUG) Log.v(TAG, "Completed [UI thread]: "+this);
-							reuseTask(RunnableTask.this);
+								if(DEBUG) Log.v(TAG, "Completed [UI thread]: "+RunnableTask.this);
+							});
 						}
-					});
-				}else{
-					if(DEBUG) Log.v(TAG, "Completed: "+this);
-					reuseTask(this);
-				}
+						synchronized(ListImageLoader.this){
+							incomplete.remove(RunnableTask.this);
+						}
+					}
+
+					@Override
+					public void onImageLoadingFailed(ImageLoaderRequest req, Throwable error){
+						synchronized(ListImageLoader.this){
+							incomplete.remove(RunnableTask.this);
+						}
+					}
+				}, set);
 			}catch(Exception x){
 				Log.w(TAG, x);
-			}
-			synchronized(ListImageLoader.this){
-				incomplete.remove(this);
 			}
 		}
 		

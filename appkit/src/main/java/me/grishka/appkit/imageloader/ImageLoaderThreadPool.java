@@ -1,11 +1,7 @@
 package me.grishka.appkit.imageloader;
 
-import android.os.Build;
 import android.os.Process;
 
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -19,20 +15,11 @@ import me.grishka.appkit.utils.WorkerThread;
 public class ImageLoaderThreadPool {
 	private static final int THREAD_COUNT=8;
 	private static final ThreadPoolExecutor cacheExecutor=new ThreadPoolExecutor(THREAD_COUNT, THREAD_COUNT, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new LoaderThreadFactory());
-	private static final ExecutorService networkExecutor;
 	private static final WorkerThread canceler;
 
 	static{
-		if(Build.VERSION.SDK_INT<24)
-			networkExecutor=new ThreadPoolExecutor(THREAD_COUNT, THREAD_COUNT, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new LoaderThreadFactory());
-		else
-			networkExecutor=Executors.newWorkStealingPool(THREAD_COUNT);
 		canceler=new WorkerThread("ImageLoader canceler");
 		canceler.start();
-	}
-
-	/*package*/ static void enqueueTask(Runnable task){
-		networkExecutor.execute(task);
 	}
 
 	/*package*/ static void enqueueCachedTask(Runnable task){

@@ -8,7 +8,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 
-import androidx.annotation.Nullable;
 import me.grishka.appkit.R;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
@@ -32,14 +31,14 @@ public class ViewImageLoader{
 	}
 
 	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, boolean animate) {
-		load(target, placeholder, req, null, animate, false);
+		load(target, placeholder, req, animate, false);
 	}
 
 	public static void loadWithoutAnimation(ImageView view, Drawable placeholder, ImageLoaderRequest req){
 		load(new ImageViewTarget(view), placeholder, req, false);
 	}
 
-	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, @Nullable String localPath, boolean animate, boolean allowMultiple) {
+	public static void load(Target target, Drawable placeholder, ImageLoaderRequest req, boolean animate, boolean allowMultiple) {
 		View view=target.getView();
 		if(!allowMultiple){
 			LoadTask prevTask=(LoadTask) view.getTag(R.id.tag_image_load_task);
@@ -58,14 +57,8 @@ public class ViewImageLoader{
 		LoadTask task = new LoadTask();
 		task.target = target;
 		task.req = req;
-		task.localPath=localPath;
 		task.animate = animate;
 		view.setTag(R.id.tag_image_load_task, task);
-		if (ImageCache.getInstance(target.getView().getContext()).isInCache(req)) {
-			ImageLoaderThreadPool.enqueueCachedTask(task);
-		} else {
-			ImageLoaderThreadPool.enqueueTask(task);
-		}
 		View.OnAttachStateChangeListener detachListener=new View.OnAttachStateChangeListener() {
 			@Override
 			public void onViewAttachedToWindow(View view) {
@@ -83,6 +76,7 @@ public class ViewImageLoader{
 		};
 		view.setTag(R.id.tag_detach_listener, detachListener);
 		view.addOnAttachStateChangeListener(detachListener);
+		task.run();
 	}
 
 	public interface Target {
@@ -112,56 +106,55 @@ public class ViewImageLoader{
 	private static class LoadTask implements Runnable {
 
 		private boolean canceled = false;
-		private ImageCache.RequestWrapper reqWrapper;
+		private ImageCache.PendingImageRequest pendingRequest;
 		public Target target;
 		public ImageLoaderRequest req;
 		public boolean animate;
-		private String localPath;
 
 		public void cancel() {
 			Log.i(TAG, "Canceled "+req);
 			canceled = true;
-			ImageLoaderThreadPool.enqueueCancellation(()->{
-				try {
-					if (reqWrapper != null) {
-						reqWrapper.cancel();
-					}
-				} catch (Exception ignored) {
-				}
-			});
+			if(pendingRequest!=null)
+				pendingRequest.cancel();
+		}
+
+		private void removeDetachListener(){
+			View view=target.getView();
+			View.OnAttachStateChangeListener listener=(View.OnAttachStateChangeListener) view.getTag(R.id.tag_detach_listener);
+			view.setTag(R.id.tag_detach_listener, null);
+			view.removeOnAttachStateChangeListener(listener);
 		}
 
 		@Override
 		public void run() {
-			try {
-				if (canceled) {
-					return;
-				}
-				reqWrapper = new ImageCache.RequestWrapper();
-				final Drawable bmp = ImageCache.getInstance(target.getView().getContext()).get(req, localPath, reqWrapper, null, true);
-				reqWrapper = null;
-				if (bmp != null && !canceled) {
-					uiHandler.post(()->{
-						if (canceled) {
-							return;
-						}
-						target.setImageDrawable(bmp);
-						if (animate) {
-							target.getView().setAlpha(0);
-							target.getView().animate().alpha(1).setDuration(200).start();
-						}
-						if(bmp instanceof Animatable)
-							((Animatable) bmp).start();
-					});
-				}
-			} catch (Exception x) {
-				Log.w(TAG, "Error downloading image", x);
-			}finally{
-				View view=target.getView();
-				View.OnAttachStateChangeListener listener=(View.OnAttachStateChangeListener) view.getTag(R.id.tag_detach_listener);
-				view.setTag(R.id.tag_detach_listener, null);
-				view.removeOnAttachStateChangeListener(listener);
+			if (canceled) {
+				return;
 			}
+			pendingRequest=ImageCache.getInstance(target.getView().getContext()).get(req, null, new ImageLoaderCallback(){
+				@Override
+				public void onImageLoaded(ImageLoaderRequest req, Drawable image){
+					removeDetachListener();
+					if(!canceled){
+						uiHandler.post(()->{
+							if (canceled) {
+								return;
+							}
+							target.setImageDrawable(image);
+							if (animate) {
+								target.getView().setAlpha(0);
+								target.getView().animate().alpha(1).setDuration(200).start();
+							}
+							if(image instanceof Animatable anim)
+								anim.start();
+						});
+					}
+				}
+
+				@Override
+				public void onImageLoadingFailed(ImageLoaderRequest req, Throwable error){
+					removeDetachListener();
+				}
+			}, true);
 		}
 	}
 }

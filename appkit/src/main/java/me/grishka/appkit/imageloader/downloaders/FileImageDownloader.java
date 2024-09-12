@@ -33,7 +33,7 @@ public class FileImageDownloader extends ImageDownloader {
 	}
 
 	@Override
-	public Drawable getDrawable(ImageLoaderRequest _req, boolean decode, ImageCache.RequestWrapper wrapper) throws IOException{
+	public Drawable getDrawable(ImageLoaderRequest _req, boolean decode, ImageCache.ImageDownloadInfo info) throws IOException{
 		if(!decode)
 			return null;
 
