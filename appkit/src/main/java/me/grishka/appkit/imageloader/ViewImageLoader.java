@@ -133,9 +133,9 @@ public class ViewImageLoader{
 			pendingRequest=ImageCache.getInstance(target.getView().getContext()).get(req, null, new ImageLoaderCallback(){
 				@Override
 				public void onImageLoaded(ImageLoaderRequest req, Drawable image){
-					removeDetachListener();
 					if(!canceled){
 						uiHandler.post(()->{
+							removeDetachListener();
 							if (canceled) {
 								return;
 							}
@@ -152,7 +152,7 @@ public class ViewImageLoader{
 
 				@Override
 				public void onImageLoadingFailed(ImageLoaderRequest req, Throwable error){
-					removeDetachListener();
+					uiHandler.post(LoadTask.this::removeDetachListener);
 				}
 			}, true);
 		}

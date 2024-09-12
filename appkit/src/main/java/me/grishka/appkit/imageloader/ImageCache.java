@@ -58,6 +58,7 @@ public class ImageCache{
 	private final Object diskCacheLock=new Object();
 	private Context appContext;
 	private final HashMap<String, ImageDownloadInfo> currentlyLoading=new HashMap<>();
+	private final ArrayList<Runnable> runAfterDiskCacheOpens=new ArrayList<>();
 
 	private static ImageCache instance=null;
 	private static Parameters params=new Parameters();
@@ -182,6 +183,12 @@ public class ImageCache{
 							ref.get().updateImages();
 					}
 					diskCacheLock.notifyAll();
+					synchronized(runAfterDiskCacheOpens){
+						for(Runnable r:runAfterDiskCacheOpens){
+							r.run();
+						}
+						runAfterDiskCacheOpens.clear();
+					}
 				} catch (Exception x) {
 					Log.w(TAG, "Error opening disk cache", x);
 				}
@@ -219,7 +226,6 @@ public class ImageCache{
 	 */
 	public PendingImageRequest get(ImageLoaderRequest req, ProgressCallback pc, ImageLoaderCallback callback, final boolean decode){
 		if(DEBUG) Log.d(TAG, "Get image: "+decode+" "+req);
-		String memKey=req.getMemoryCacheKey();
 		String diskKey=req.getDiskCacheKey();
 		final ImageDownloadInfo dlInfo;
 		final PendingImageRequest pendingRequest;
@@ -238,11 +244,18 @@ public class ImageCache{
 				currentlyLoading.put(diskKey, dlInfo);
 			}
 		}
+		getInternal(req, pc, decode, dlInfo, pendingRequest);
+		return pendingRequest;
+	}
+
+	private void getInternal(ImageLoaderRequest req, ProgressCallback pc, final boolean decode, final ImageDownloadInfo dlInfo, final PendingImageRequest pendingRequest){
+		String memKey=req.getMemoryCacheKey();
+		String diskKey=req.getDiskCacheKey();
 		try{
 			Drawable bmp=cache.get(memKey);
 			if(bmp!=null){
 				invokeCompletionCallbacks(req, bmp);
-				return pendingRequest;
+				return;
 			}
 			ImageDownloader downloader=downloaders.stream().filter(candidate->candidate.canHandleRequest(req)).findFirst().orElse(null);
 			if(downloader==null){
@@ -260,10 +273,15 @@ public class ImageCache{
 						invokeFailureCallbacks(req, x);
 					}
 				});
-				return pendingRequest;
+				return;
 			}
 
-			waitForDiskCache();
+			if(diskCache==null){
+				synchronized(runAfterDiskCacheOpens){
+					runAfterDiskCacheOpens.add(()->getInternal(req, pc, decode, dlInfo, pendingRequest));
+				}
+				return;
+			}
 			DiskLruCache.Value entry=diskCache.get(diskKey);
 			if(entry!=null){
 				if(decode){
@@ -278,7 +296,7 @@ public class ImageCache{
 				}else{
 					invokeCompletionCallbacks(req, null);
 				}
-				return pendingRequest;
+				return;
 			}
 			final DiskLruCache.Editor editor=diskCache.edit(diskKey);
 			if(editor==null){
@@ -325,7 +343,6 @@ public class ImageCache{
 			Log.w(TAG, req.toString(), x);
 			invokeFailureCallbacks(req, x);
 		}
-		return pendingRequest;
 	}
 
 	private void invokeCompletionCallbacks(ImageLoaderRequest req, Drawable img){
