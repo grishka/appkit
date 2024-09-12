@@ -10,4 +10,5 @@ public interface ImageLoaderViewHolder {
 	default void clearImage(int index){
 		setImage(index, null);
 	}
+	default void onImageLoadingFailed(int index, Throwable error){}
 }

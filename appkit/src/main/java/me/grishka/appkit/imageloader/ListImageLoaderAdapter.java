@@ -9,5 +9,5 @@ public interface ListImageLoaderAdapter {
 	int getImageCountForItem(int item);
 	ImageLoaderRequest getImageRequest(int item, int image);
 	void imageLoaded(int item, int image, Drawable drawable);
-
+	void imageLoadingFailed(int item, int image, Throwable error);
 }

@@ -74,4 +74,17 @@ public class MergeImageLoaderAdapter implements ListImageLoaderAdapter {
         }
 	}
 
+	@Override
+	public void imageLoadingFailed(int item, int image, Throwable error){
+		int pos=item;
+		for(ListImageLoaderAdapter piece:pieces){
+			int size=piece.getCount();
+			if(item<size){
+				piece.imageLoadingFailed(pos, image, error);
+				return;
+			}
+			pos-=size;
+		}
+	}
+
 }

@@ -28,6 +28,7 @@ import android.widget.Toolbar;
 
 import java.util.List;
 
+import androidx.annotation.CallSuper;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.LayoutRes;
 import me.grishka.appkit.FragmentStackActivity;
@@ -552,10 +553,12 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 			onHidden();
 	}
 
+	@CallSuper
 	protected void onShown(){
 
 	}
 
+	@CallSuper
 	protected void onHidden(){
 
 	}

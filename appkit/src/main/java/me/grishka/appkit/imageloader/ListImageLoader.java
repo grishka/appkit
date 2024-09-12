@@ -7,7 +7,10 @@ import android.os.Looper;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import androidx.collection.LongSparseArray;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
@@ -23,6 +26,7 @@ public class ListImageLoader {
 	private final Handler mainThreadHandler;
 	private final LongSparseArray<String> loadedRequests=new LongSparseArray<>(10);
 	private LongSparseArray<RunnableTask> pendingPartialCancel;
+	private HashSet<Long> failedRequests=new HashSet<>();
 
 	public ListImageLoader(){
 		mainThreadHandler=new Handler(Looper.getMainLooper());
@@ -61,6 +65,12 @@ public class ListImageLoader {
 			int cnt=adapter.getImageCountForItem(item);
 			for(int i=0;i<cnt;i++){
 				ImageLoaderRequest req=adapter.getImageRequest(item, i);
+				synchronized(this){
+					if(failedRequests.contains(makeIndex(item, i))){
+						if(DEBUG) Log.v(TAG, "not loading "+item+", "+i+" because it failed previously");
+						continue;
+					}
+				}
 				if(req==null)
 					continue;
 				if(pendingPartialCancel!=null){
@@ -72,6 +82,8 @@ public class ListImageLoader {
 						continue;
 					}
 				}
+				if(isLoading(item, i))
+					continue;
 				if(req.getMemoryCacheKey().equals(loadedRequests.get(makeIndex(item, i))) || force){
 					if(ImageCache.getInstance(context).isInTopCache(req)){ // (in)sanity check
 						if(DEBUG) Log.v(TAG, "Image ["+item+"/"+i+"] already loaded; skipping");
@@ -136,6 +148,18 @@ public class ListImageLoader {
 				r.item+=amount;
 			}
 		}
+		if(!failedRequests.isEmpty()){
+			HashSet<Long> newFailedRequests=new HashSet<>();
+			for(long index:failedRequests){
+				int pos=getPosition(index);
+				if(pos>=start && pos<end){
+					newFailedRequests.add(makeIndex(pos+amount, getImage(index)));
+				}else{
+					newFailedRequests.add(index);
+				}
+			}
+			failedRequests=newFailedRequests;
+		}
 	}
 	
 	public synchronized void cancelRange(int start, int end){
@@ -157,6 +181,20 @@ public class ListImageLoader {
 			t.cancel();
 		}
 		incomplete.clear();
+	}
+
+	public synchronized void clearFailedRequests(){
+		if(DEBUG) Log.i(TAG, "Clearing failed requests");
+		failedRequests.clear();
+	}
+
+	public synchronized void retryFailedRequests(Context context){
+		if(DEBUG) Log.i(TAG, "Retrying failed requests");
+		Set<Integer> failedRequests=this.failedRequests.stream().map(ListImageLoader::getPosition).collect(Collectors.toSet());
+		this.failedRequests.clear();
+		for(int index:failedRequests){
+			loadSingleItem(index, context, true);
+		}
 	}
 
 	public synchronized void preparePartialCancel(){
@@ -261,9 +299,12 @@ public class ListImageLoader {
 
 					@Override
 					public void onImageLoadingFailed(ImageLoaderRequest req, Throwable error){
+						if(DEBUG) Log.v(TAG, "Failed: "+RunnableTask.this+" with "+error);
 						synchronized(ListImageLoader.this){
 							incomplete.remove(RunnableTask.this);
+							failedRequests.add(makeIndex(item, image));
 						}
+						mainThreadHandler.post(()->adapter.imageLoadingFailed(item, image, error));
 					}
 				}, set);
 			}catch(Exception x){

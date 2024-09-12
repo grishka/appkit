@@ -296,9 +296,21 @@ public abstract class BaseRecyclerFragment<T> extends LoaderFragment implements 
 		contentWrap=null;
 		footerView=footerProgress=footerError=null;
 		refreshLayout=null;
+		imgLoader=null;
+	}
+
+	@Override
+	protected void onHidden(){
+		super.onHidden();
 		if(imgLoader!=null)
 			imgLoader.deactivate();
-		imgLoader=null;
+	}
+
+	@Override
+	protected void onShown(){
+		super.onShown();
+		if(imgLoader!=null)
+			imgLoader.activate();
 	}
 
 	@Override

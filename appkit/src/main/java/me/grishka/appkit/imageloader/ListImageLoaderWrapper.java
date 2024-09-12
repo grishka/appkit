@@ -29,6 +29,7 @@ public class ListImageLoaderWrapper{
 	private DataSetObserver observer=new DataSetObserver(){
 		@Override
 		public void onEverythingChanged(){
+			imgLoader.clearFailedRequests();
 			updateImages();
 		}
 
@@ -178,6 +179,7 @@ public class ListImageLoaderWrapper{
 		if(!isActive)
 			return;
 		imgLoader.cancelAll();
+		imgLoader.clearFailedRequests();
 		isActive=false;
 	}
 	
@@ -328,6 +330,10 @@ public class ListImageLoaderWrapper{
 			else
 				holder.clearImage(i);
 		}
+	}
+
+	public void retryFailedRequests(){
+		imgLoader.retryFailedRequests(context);
 	}
 
 	/*package*/ void onCacheEntryRemoved(String key){

@@ -291,6 +291,14 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	@Override
+	public void imageLoadingFailed(int item, int image, Throwable error){
+		ViewHolder holder=findViewHolderForAdapterPosition(item);
+		if(holder instanceof ImageLoaderViewHolder ilvh){
+			ilvh.onImageLoadingFailed(image, error);
+		}
+	}
+
+	@Override
 	public void addDataSetObserver(ListImageLoaderWrapper.DataSetObserver observer){
 		imgLoaderObservers.add(observer);
 	}
