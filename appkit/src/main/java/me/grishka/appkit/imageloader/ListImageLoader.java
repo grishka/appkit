@@ -176,7 +176,7 @@ public class ListImageLoader {
 	}
 	
 	public synchronized void cancelAll(){
-		if(DEBUG) Log.w(TAG, "Cancel all");
+		if(DEBUG) Log.w(TAG, "Cancel all", new Throwable().fillInStackTrace());
 		for(RunnableTask t:incomplete){
 			if(DEBUG) Log.v(TAG, "Canceled(all): "+t);
 			t.cancel();

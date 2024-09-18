@@ -57,6 +57,7 @@ public class ListImageLoaderWrapper{
 	};
 	private float prefetchScreens=1;
 	private boolean isActive=true;
+	private int lastScrollState;
 	
 	private static final String TAG="appkit-img-wrapper";
 
@@ -214,7 +215,7 @@ public class ListImageLoaderWrapper{
 		if(visLast!=prevVisLast /*|| viStart!=prevVisFirst*/){
 			long tDiff=System.currentTimeMillis()-lastChangeTime;
 			//Log.v(TAG, "Items changed, prev "+prevVisFirst+" - "+prevVisLast+", now "+viStart+" - "+visLast+", time since last "+tDiff);
-			if(tDiff>300){
+			if(tDiff>300 || lastScrollState==RecyclerView.SCROLL_STATE_IDLE){
 				if(wasFastScrolling){
 					//imgLoader.setIsScrolling(true);
 					imgLoader.setIsScrolling(false);
@@ -276,6 +277,7 @@ public class ListImageLoaderWrapper{
 		if(!isActive)
 			return;
 		//Log.d("appkit", "scroll state changed "+scrollState);
+		lastScrollState=scrollState;
 		if(scrollState==RecyclerView.SCROLL_STATE_IDLE && listener!=null) listener.onScrollStopped();
 		if(scrollState==RecyclerView.SCROLL_STATE_DRAGGING && listener!=null) listener.onScrollStarted();
 		/*if(scrollState==SCROLL_STATE_TOUCH_SCROLL){
