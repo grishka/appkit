@@ -1,7 +1,6 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
-import android.database.DataSetObserver;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -133,11 +132,7 @@ public class ListImageLoaderWrapper{
 	}
 
 	private int getLastVisiblePosition(){
-		RecyclerView.LayoutManager lm=Objects.requireNonNull(list.getLayoutManager());
-		int count=lm.getChildCount();
-		if(count==0)
-			return 0;
-		return list.getChildAdapterPosition(lm.getChildAt(count-1));
+		return getFirstVisiblePosition()+getVisibleItemCount();
 	}
 
 	private int getVisibleItemCount(){
@@ -147,6 +142,7 @@ public class ListImageLoaderWrapper{
 	private void reloadRange(int position, int count){
 		int posMin=getFirstVisiblePosition()-Math.round(getVisibleItemCount()*prefetchScreens);
 		int posMax=getLastVisiblePosition()+Math.round(getVisibleItemCount()*prefetchScreens);
+//		Log.i(TAG, "Reload range "+position+", "+count+"; min-max = "+posMin+" - "+posMax+"; first="+getFirstVisiblePosition()+"; last="+getLastVisiblePosition());
 		if(position+count<posMin || position>posMax) return;
 		int start=Math.max(posMin, position);
 		int end=Math.min(posMax, position+count);

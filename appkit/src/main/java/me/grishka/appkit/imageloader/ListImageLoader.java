@@ -145,6 +145,7 @@ public class ListImageLoader {
 	public synchronized void offsetRange(int start, int end, int amount){
 		for(RunnableTask r:incomplete){
 			if(r.item>=start && r.item<end){
+				if(DEBUG) Log.v(TAG, "Offsetting "+r+" by "+amount);
 				r.item+=amount;
 			}
 		}
