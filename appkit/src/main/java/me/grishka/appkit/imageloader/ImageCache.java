@@ -365,19 +365,23 @@ public class ImageCache{
 
 	public void decodeImageAsync(File file, Uri uri, ImageLoaderRequest req, Consumer<Drawable> onSuccess, Consumer<Throwable> onError){
 		ImageLoaderThreadPool.enqueueCachedTask(()->{
+			Drawable image=null;
+			boolean success=false;
 			try{
-				onSuccess.accept(decodeImage(file, uri, req));
+				image=decodeImage(file, uri, req);
+				success=true;
 			}catch(Throwable x){
 				Log.w(TAG, "Failed to decode "+(file==null ? uri : file), x);
 				onError.accept(x);
 			}
+			if(success)
+				onSuccess.accept(image);
 		});
 	}
 
 	public Drawable decodeImage(File file, Uri uri, ImageLoaderRequest req) throws IOException{
 		if(file==null && uri==null){
-			Log.w(TAG, "tried to decode null image");
-			return null;
+			throw new IllegalArgumentException("file or uri must be non-null");
 		}
 		Drawable drawable;
 		if(Build.VERSION.SDK_INT>=28){
