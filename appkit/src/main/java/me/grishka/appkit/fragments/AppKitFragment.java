@@ -55,6 +55,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	private boolean ignoreSpinnerSelection;
 	private boolean resumed;
 	private boolean hidden;
+	private boolean shownAndResumed;
 
 	/**
 	 * If your fragment is used as a child in TabbedFragment, this will be in the arguments.
@@ -528,12 +529,16 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	@Override
 	public void onHiddenChanged(boolean hidden){
 		super.onHiddenChanged(hidden);
-		if(hidden!=this.hidden && resumed){
+		if(hidden!=this.hidden){
 			this.hidden=hidden;
-			if(hidden)
-				onHidden();
-			else
-				onShown();
+			boolean newShownAndResumed=!hidden && resumed;
+			if(newShownAndResumed!=shownAndResumed){
+				shownAndResumed=newShownAndResumed;
+				if(shownAndResumed)
+					onShown();
+				else
+					onHidden();
+			}
 		}
 	}
 
@@ -541,16 +546,24 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 	public void onResume(){
 		super.onResume();
 		resumed=true;
-		if(!hidden)
-			onShown();
+		boolean newShownAndResumed=!hidden;
+		if(newShownAndResumed!=shownAndResumed){
+			shownAndResumed=newShownAndResumed;
+			if(shownAndResumed)
+				onShown();
+			else
+				onHidden();
+		}
 	}
 
 	@Override
 	public void onPause(){
 		super.onPause();
 		resumed=false;
-		if(!hidden)
+		if(shownAndResumed){
+			shownAndResumed=false;
 			onHidden();
+		}
 	}
 
 	@CallSuper
