@@ -29,7 +29,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -175,20 +174,29 @@ public class ImageCache{
 
 	private void open(){
 		new Thread(()->{
+			if(DEBUG) Log.i(TAG, "Opening disk cache");
 			synchronized(diskCacheLock) {
 				try {
 					diskCache = DiskLruCache.open(new File(appContext.getCacheDir(), "images"), 1, 1, params.diskCacheSize);
+					if(DEBUG) Log.i(TAG, "Done opening disk cache");
 					for(WeakReference<ListImageLoaderWrapper> ref:registeredLoaders){
-						if(ref.get()!=null)
-							ref.get().updateImages();
+						ListImageLoaderWrapper loader=ref.get();
+						if(loader!=null){
+							if(DEBUG) Log.d(TAG, "Calling updateImages() on "+loader);
+							loader.updateImages();
+						}else if(DEBUG){
+							Log.d(TAG, "A registered ListImageLoaderWrapper reference was null");
+						}
 					}
 					diskCacheLock.notifyAll();
 					synchronized(runAfterDiskCacheOpens){
 						for(Runnable r:runAfterDiskCacheOpens){
+							if(DEBUG) Log.d(TAG, "Running: "+r);
 							r.run();
 						}
 						runAfterDiskCacheOpens.clear();
 					}
+					if(DEBUG) Log.i(TAG, "Cache initialization done");
 				} catch (Exception x) {
 					Log.w(TAG, "Error opening disk cache", x);
 				}
@@ -197,11 +205,17 @@ public class ImageCache{
 	}
 
 	private void waitForDiskCache(){
-		if(diskCache==null && Looper.myLooper()!=Looper.getMainLooper()) {
-			synchronized (diskCacheLock) {
-				while(diskCache==null){
-					try{diskCacheLock.wait();}catch(InterruptedException ignore){}
+		if(diskCache==null){
+			if(DEBUG) Log.i(TAG, Thread.currentThread().getName()+": waitForDiskCache()");
+			if(Looper.myLooper()!=Looper.getMainLooper()){
+				synchronized(diskCacheLock){
+					while(diskCache==null){
+						try{diskCacheLock.wait();}catch(InterruptedException ignore){}
+					}
 				}
+				if(DEBUG) Log.i(TAG, Thread.currentThread().getName()+": done waiting for disk cache");
+			}else if(DEBUG){
+				Log.w(TAG, "Skipped waiting for disk cache because we're on the main thread");
 			}
 		}
 	}
@@ -235,6 +249,7 @@ public class ImageCache{
 				pendingRequest=new PendingImageRequest(existingDlInfo, callback);
 				pendingRequest.decode=decode;
 				existingDlInfo.requests.add(pendingRequest);
+				if(DEBUG) Log.d(TAG, "Adding "+req+" to existing download info "+existingDlInfo);
 				return pendingRequest;
 			}else{
 				dlInfo=new ImageDownloadInfo(diskKey);
@@ -244,11 +259,11 @@ public class ImageCache{
 				currentlyLoading.put(diskKey, dlInfo);
 			}
 		}
-		getInternal(req, pc, decode, dlInfo, pendingRequest);
+		getInternal(req, pc, dlInfo, pendingRequest);
 		return pendingRequest;
 	}
 
-	private void getInternal(ImageLoaderRequest req, ProgressCallback pc, final boolean decode, final ImageDownloadInfo dlInfo, final PendingImageRequest pendingRequest){
+	private void getInternal(ImageLoaderRequest req, ProgressCallback pc, final ImageDownloadInfo dlInfo, final PendingImageRequest pendingRequest){
 		String memKey=req.getMemoryCacheKey();
 		String diskKey=req.getDiskCacheKey();
 		try{
@@ -262,10 +277,12 @@ public class ImageCache{
 				throw new IOException("Could not find a downloader to perform request "+req);
 			}
 
+			if(DEBUG) Log.v(TAG, "Using downloader "+downloader+" for "+req);
+
 			if(!downloader.needsDiskCache()){
 				ImageLoaderThreadPool.enqueueCachedTask(()->{
 					try{
-						Drawable img=downloader.getDrawable(req, decode, dlInfo);
+						Drawable img=downloader.getDrawable(req, dlInfo.needDecode(), dlInfo);
 						if(img!=null)
 							cache.put(memKey, img);
 						invokeCompletionCallbacks(req, img);
@@ -278,13 +295,15 @@ public class ImageCache{
 
 			if(diskCache==null){
 				synchronized(runAfterDiskCacheOpens){
-					runAfterDiskCacheOpens.add(()->getInternal(req, pc, decode, dlInfo, pendingRequest));
+					if(DEBUG) Log.d(TAG, "Disk cache not open yet, delaying "+req);
+					runAfterDiskCacheOpens.add(()->getInternal(req, pc, dlInfo, pendingRequest));
 				}
 				return;
 			}
 			DiskLruCache.Value entry=diskCache.get(diskKey);
 			if(entry!=null){
-				if(decode){
+				if(DEBUG) Log.v(TAG, "Found "+req+" in disk cache");
+				if(dlInfo.needDecode()){
 					decodeImageAsync(entry.getFile(0), null, req, img->{
 						if(DEBUG)
 							Log.v(TAG, req+" -> [disk] "+img);
@@ -346,6 +365,7 @@ public class ImageCache{
 	}
 
 	private void invokeCompletionCallbacks(ImageLoaderRequest req, Drawable img){
+		if(DEBUG) Log.v(TAG, "Invoking completion callbacks for request "+req+", drawable "+img);
 		synchronized(currentlyLoading){
 			ImageDownloadInfo info=Objects.requireNonNull(currentlyLoading.remove(req.getDiskCacheKey()));
 			for(PendingImageRequest pr:info.requests){
@@ -355,8 +375,13 @@ public class ImageCache{
 	}
 
 	private void invokeFailureCallbacks(ImageLoaderRequest req, Throwable error){
+		if(DEBUG) Log.v(TAG, "Invoking failure callbacks for request "+req+", error "+error);
 		synchronized(currentlyLoading){
-			ImageDownloadInfo info=Objects.requireNonNull(currentlyLoading.remove(req.getDiskCacheKey()));
+			ImageDownloadInfo info=currentlyLoading.remove(req.getDiskCacheKey());
+			if(info==null){
+				if(DEBUG) Log.w(TAG, "No download info found for "+req);
+				return;
+			}
 			for(PendingImageRequest pr:info.requests){
 				pr.callback.onImageLoadingFailed(req, error);
 			}
@@ -383,6 +408,7 @@ public class ImageCache{
 		if(file==null && uri==null){
 			throw new IllegalArgumentException("file or uri must be non-null");
 		}
+		if(DEBUG) Log.v(TAG, "Decoding file "+file+", uri "+uri+", req "+req);
 		Drawable drawable;
 		if(Build.VERSION.SDK_INT>=28){
 			ImageDecoder.Source source;
@@ -475,8 +501,12 @@ public class ImageCache{
 			}
 		}
 
-		for(ImageProcessingStep step:req.processingSteps)
+		for(ImageProcessingStep step:req.processingSteps){
+			if(DEBUG) Log.v(TAG, "Applying processing step "+step+" for "+req);
 			drawable=step.processDrawable(drawable);
+		}
+
+		if(DEBUG) Log.v(TAG, "Decode for "+req+" done, drawable "+drawable);
 
 		return drawable;
 	}
@@ -580,9 +610,11 @@ public class ImageCache{
 		private void cancel(PendingImageRequest req){
 			if(!requests.remove(req))
 				return;
+			if(DEBUG) Log.v(TAG, "Removed "+req+" for "+this+", "+requests.size()+" requests remaining, httpCall "+httpCall);
 			if(requests.isEmpty() && httpCall!=null){
 				ImageLoaderThreadPool.enqueueCancellation(()->{
 					if(httpCall!=null){
+						if(DEBUG) Log.v(TAG, "Canceling httpCall "+httpCall);
 						httpCall.cancel();
 						httpCall=null;
 					}
@@ -616,6 +648,7 @@ public class ImageCache{
 		public void cancel(){
 			if(canceled)
 				return;
+			if(DEBUG) Log.v(TAG, "Canceling "+this);
 			canceled=true;
 			info.cancel(this);
 		}
