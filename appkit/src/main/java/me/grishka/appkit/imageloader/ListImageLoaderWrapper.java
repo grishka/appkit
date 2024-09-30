@@ -40,8 +40,9 @@ public class ListImageLoaderWrapper{
 
 		@Override
 		public void onItemRangeInserted(int position, int count){
-			imgLoader.offsetRange(position+count, list.getLayoutManager().getItemCount(), count);
-			reloadRange(position, count);
+//			imgLoader.offsetRange(position+count, list.getLayoutManager().getItemCount(), count);
+//			reloadRange(position, count);
+			updateImages();
 		}
 	};
 	private RecyclerView.OnScrollListener scrollListener=new RecyclerView.OnScrollListener(){
