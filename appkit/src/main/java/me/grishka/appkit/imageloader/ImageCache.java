@@ -608,28 +608,32 @@ public class ImageCache{
 		}
 
 		private void cancel(PendingImageRequest req){
-			if(!requests.remove(req))
-				return;
-			if(DEBUG) Log.v(TAG, "Removed "+req+" for "+this+", "+requests.size()+" requests remaining, httpCall "+httpCall);
-			if(requests.isEmpty() && httpCall!=null){
-				ImageLoaderThreadPool.enqueueCancellation(()->{
-					if(httpCall!=null){
-						if(DEBUG) Log.v(TAG, "Canceling httpCall "+httpCall);
-						httpCall.cancel();
-						httpCall=null;
-					}
-					synchronized(currentlyLoading){
-						canceled=true;
-						currentlyLoading.remove(diskCacheKey);
-					}
-				});
+			synchronized(currentlyLoading){
+				if(!requests.remove(req))
+					return;
+				if(DEBUG) Log.v(TAG, "Removed "+req+" for "+this+", "+requests.size()+" requests remaining, httpCall "+httpCall);
+				if(requests.isEmpty() && httpCall!=null){
+					ImageLoaderThreadPool.enqueueCancellation(()->{
+						if(httpCall!=null){
+							if(DEBUG) Log.v(TAG, "Canceling httpCall "+httpCall);
+							httpCall.cancel();
+							httpCall=null;
+						}
+						synchronized(currentlyLoading){
+							canceled=true;
+							currentlyLoading.remove(diskCacheKey);
+						}
+					});
+				}
 			}
 		}
 
 		private boolean needDecode(){
-			for(PendingImageRequest req:requests){
-				if(req.decode)
-					return true;
+			synchronized(currentlyLoading){
+				for(PendingImageRequest req:requests){
+					if(req.decode)
+						return true;
+				}
 			}
 			return false;
 		}
