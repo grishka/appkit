@@ -308,8 +308,12 @@ public class ImageCache{
 						if(DEBUG)
 							Log.v(TAG, req+" -> [disk] "+img);
 						cache.put(memKey, img);
+						if(pendingRequest.canceled)
+							return;
 						invokeCompletionCallbacks(req, img);
 					}, err->{
+						if(pendingRequest.canceled)
+							return;
 						invokeFailureCallbacks(req, err);
 					});
 				}else{
@@ -332,10 +336,14 @@ public class ImageCache{
 					if(dlInfo.needDecode()){
 						if(value!=null){
 							decodeImageAsync(value.getFile(0), null, req, img->{
+								if(pendingRequest.canceled)
+									return;
 								if(DEBUG) Log.v(TAG, req+" -> [download] "+img);
 								cache.put(memKey, img);
 								invokeCompletionCallbacks(req, img);
 							}, err->{
+								if(pendingRequest.canceled)
+									return;
 								invokeFailureCallbacks(req, err);
 							});
 						}
