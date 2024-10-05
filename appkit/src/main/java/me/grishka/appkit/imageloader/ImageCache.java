@@ -308,11 +308,11 @@ public class ImageCache{
 						if(DEBUG)
 							Log.v(TAG, req+" -> [disk] "+img);
 						cache.put(memKey, img);
-						if(pendingRequest.canceled)
+						if(dlInfo.canceled)
 							return;
 						invokeCompletionCallbacks(req, img);
 					}, err->{
-						if(pendingRequest.canceled)
+						if(dlInfo.canceled)
 							return;
 						invokeFailureCallbacks(req, err);
 					});
@@ -330,19 +330,19 @@ public class ImageCache{
 				try{
 					out.close();
 					editor.commit();
-					if(pendingRequest.canceled)
+					if(dlInfo.canceled)
 						return;
 					DiskLruCache.Value value=diskCache.get(diskKey);
 					if(dlInfo.needDecode()){
 						if(value!=null){
 							decodeImageAsync(value.getFile(0), null, req, img->{
-								if(pendingRequest.canceled)
+								if(dlInfo.canceled)
 									return;
 								if(DEBUG) Log.v(TAG, req+" -> [download] "+img);
 								cache.put(memKey, img);
 								invokeCompletionCallbacks(req, img);
 							}, err->{
-								if(pendingRequest.canceled)
+								if(dlInfo.canceled)
 									return;
 								invokeFailureCallbacks(req, err);
 							});
@@ -362,7 +362,7 @@ public class ImageCache{
 				}catch(IOException x){
 					Log.e(TAG, "Failed to remove a failed download from disk cache", x);
 				}
-				if(!pendingRequest.canceled)
+				if(!dlInfo.canceled)
 					invokeFailureCallbacks(req, err);
 			});
 
