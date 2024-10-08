@@ -375,7 +375,11 @@ public class ImageCache{
 	private void invokeCompletionCallbacks(ImageLoaderRequest req, Drawable img){
 		if(DEBUG) Log.v(TAG, "Invoking completion callbacks for request "+req+", drawable "+img);
 		synchronized(currentlyLoading){
-			ImageDownloadInfo info=Objects.requireNonNull(currentlyLoading.remove(req.getDiskCacheKey()));
+			ImageDownloadInfo info=currentlyLoading.remove(req.getDiskCacheKey());
+			if(info==null){
+				if(DEBUG) Log.w(TAG, "No download info found for "+req);
+				return;
+			}
 			for(PendingImageRequest pr:info.requests){
 				pr.callback.onImageLoaded(req, img);
 			}

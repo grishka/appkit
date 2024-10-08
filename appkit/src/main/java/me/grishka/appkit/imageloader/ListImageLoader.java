@@ -130,15 +130,21 @@ public class ListImageLoader {
 		return false;
 	}
 
-	public synchronized void cancel(int item){
-		Iterator<RunnableTask> itr=incomplete.iterator();
-		while(itr.hasNext()){
-			RunnableTask t=itr.next();
-			if(t.item==item){
-				if(DEBUG) Log.v(TAG, "Canceled: "+t);
-				itr.remove();
-				t.cancel();
+	public void cancel(int item){
+		ArrayList<RunnableTask> toCancel=new ArrayList<>();
+		synchronized(this){
+			Iterator<RunnableTask> itr=incomplete.iterator();
+			while(itr.hasNext()){
+				RunnableTask t=itr.next();
+				if(t.item==item){
+					itr.remove();
+					toCancel.add(t);
+				}
 			}
+		}
+		for(RunnableTask t:toCancel){
+			if(DEBUG) Log.v(TAG, "Canceled: "+t);
+			t.cancel();
 		}
 	}
 
@@ -163,25 +169,35 @@ public class ListImageLoader {
 		}
 	}
 	
-	public synchronized void cancelRange(int start, int end){
-		Iterator<RunnableTask> itr=incomplete.iterator();
-		while(itr.hasNext()){
-			RunnableTask t=itr.next();
-			if(t.item>=start && t.item<=end){
-				if(DEBUG) Log.v(TAG, "Canceled: "+t);
-				itr.remove();
-				t.cancel();
+	public void cancelRange(int start, int end){
+		ArrayList<RunnableTask> toCancel=new ArrayList<>();
+		synchronized(this){
+			Iterator<RunnableTask> itr=incomplete.iterator();
+			while(itr.hasNext()){
+				RunnableTask t=itr.next();
+				if(t.item>=start && t.item<=end){
+					itr.remove();
+					toCancel.add(t);
+				}
 			}
+		}
+		for(RunnableTask t:toCancel){
+			if(DEBUG) Log.v(TAG, "Canceled: "+t);
+			t.cancel();
 		}
 	}
 	
-	public synchronized void cancelAll(){
+	public void cancelAll(){
 		if(DEBUG) Log.w(TAG, "Cancel all", new Throwable().fillInStackTrace());
-		for(RunnableTask t:incomplete){
+		ArrayList<RunnableTask> tasksToCancel;
+		synchronized(this){
+			tasksToCancel=new ArrayList<>(incomplete);
+			incomplete.clear();
+		}
+		for(RunnableTask t:tasksToCancel){
 			if(DEBUG) Log.v(TAG, "Canceled(all): "+t);
 			t.cancel();
 		}
-		incomplete.clear();
 	}
 
 	public synchronized void clearFailedRequests(){
@@ -208,14 +224,14 @@ public class ListImageLoader {
 	public synchronized void preparePartialCancel(){
 		if(pendingPartialCancel!=null)
 			throw new IllegalStateException("There's already a pending partial cancellation");
-		pendingPartialCancel=new LongSparseArray<RunnableTask>();
+		pendingPartialCancel=new LongSparseArray<>();
 		for(RunnableTask t:incomplete){
 			pendingPartialCancel.put(makeIndex(t.item, t.image), t);
 		}
 		incomplete.clear();
 	}
 
-	public synchronized void commitPartialCancel(){
+	public void commitPartialCancel(){
 		if(pendingPartialCancel==null)
 			throw new IllegalStateException("There's no pending partial cancellation");
 		for(int i=0;i<pendingPartialCancel.size();i++){
