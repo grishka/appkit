@@ -2,6 +2,8 @@ package me.grishka.appkit.imageloader;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
@@ -12,6 +14,7 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
+import me.grishka.appkit.utils.VelocityTracker1D;
 
 public class ListImageLoaderWrapper{
 
@@ -53,12 +56,17 @@ public class ListImageLoaderWrapper{
 
 		@Override
 		public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy){
-			onScroll(getFirstVisiblePosition(), getVisibleItemCount(), list.getLayoutManager().getItemCount());
+			onScroll(getFirstVisiblePosition(), getVisibleItemCount(), list.getLayoutManager().getItemCount(), dx, dy);
 		}
 	};
 	private float prefetchScreens=1;
 	private boolean isActive=true;
 	private int lastScrollState;
+	private final VelocityTracker1D velocityTrackerX=new VelocityTracker1D(), velocityTrackerY=new VelocityTracker1D();
+	private int scrollOffsetX, scrollOffsetY;
+	private final float displayDensity;
+	// When the list is being scrolled faster than this, image loading is paused
+	private float fastScrollVelocityThreshold=3000; // dp/s
 	
 	private static final String TAG="appkit-img-wrapper";
 
@@ -69,6 +77,7 @@ public class ListImageLoaderWrapper{
 		this.context=context;
 		list=listView;
 		list.addOnScrollListener(scrollListener);
+		displayDensity=list.getResources().getDisplayMetrics().density;
 		ImageCache.getInstance(context).registerLoader(this);
 		if(adapter instanceof ObservableListImageLoaderAdapter)
 			((ObservableListImageLoaderAdapter)adapter).addDataSetObserver(observer);
@@ -152,7 +161,6 @@ public class ListImageLoaderWrapper{
 	}
 	
 	private void doUpdateImages(){
-		//imgLoader.setIsScrolling(isOuterScrolling);
 		imgLoader.setIsScrolling(false);
 		viStart=getFirstVisiblePosition();
 		viCount=getLastVisiblePosition()-viStart;
@@ -197,67 +205,67 @@ public class ListImageLoaderWrapper{
 	}
 	
 	public interface ExtendedListener extends Listener{
-		public void onScroll(int firstItem, int visibleCount, int total);
+		void onScroll(int firstItem, int visibleCount, int total);
 	}
 
 	public void setPrefetchAmount(float screens){
 		prefetchScreens=screens;
 	}
 
-	public void onScroll(int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+	public float getFastScrollVelocityThreshold(){
+		return fastScrollVelocityThreshold;
+	}
+
+	public void setFastScrollVelocityThreshold(float fastScrollVelocityThreshold){
+		this.fastScrollVelocityThreshold=fastScrollVelocityThreshold;
+	}
+
+	private void reloadVisibleImages(){
+		imgLoader.preparePartialCancel();
+		imgLoader.loadRange(viStart, viStart+viCount, context);
+		if(lastScrollFwd){
+			imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
+			imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+		}else{
+			imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
+			imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
+		}
+		imgLoader.commitPartialCancel();
+	}
+
+	public void onScroll(int firstVisibleItem, int visibleItemCount, int totalItemCount, int dx, int dy) {
 		if(!isActive)
 			return;
+		long now=SystemClock.uptimeMillis();
+		scrollOffsetX+=dx;
+		scrollOffsetY+=dy;
+		velocityTrackerX.addDataPoint(now, scrollOffsetX);
+		velocityTrackerY.addDataPoint(now, scrollOffsetY);
+		float velocity=Math.max(Math.abs(velocityTrackerX.calculateVelocity()), Math.abs(velocityTrackerY.calculateVelocity()))/displayDensity;
 		if(viStart!=firstVisibleItem)
 			lastScrollFwd=viStart<firstVisibleItem;
 		viCount=visibleItemCount;
 		viStart=firstVisibleItem;
 		//Log.i("appkit", "on scroll "+viCount+", "+viStart);
-		int visLast=viCount+viStart;
-		if(visLast!=prevVisLast /*|| viStart!=prevVisFirst*/){
-			long tDiff=System.currentTimeMillis()-lastChangeTime;
+		int lastVisibleItem=viCount+viStart;
+		if(lastVisibleItem!=prevVisLast || viStart!=prevVisFirst){
+			long tDiff=now-lastChangeTime;
 			//Log.v(TAG, "Items changed, prev "+prevVisFirst+" - "+prevVisLast+", now "+viStart+" - "+visLast+", time since last "+tDiff);
-			if(tDiff>300 || lastScrollState==RecyclerView.SCROLL_STATE_IDLE){
+			if(velocity<fastScrollVelocityThreshold || lastScrollState==RecyclerView.SCROLL_STATE_IDLE){
 				if(wasFastScrolling){
-					//imgLoader.setIsScrolling(true);
 					imgLoader.setIsScrolling(false);
 					wasFastScrolling=false;
-					int lastVisiblePos=getLastVisiblePosition();
-					if(lastVisiblePos>=0){
-						imgLoader.loadRange(getFirstVisiblePosition(), lastVisiblePos, context);
-						if(lastScrollFwd){
-							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-							imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-						}else{
-							imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-							imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-						}
-					}
-				}else{
-					if(prevVisFirst>viStart){ // top
-						//imgLoader.loadSingleItem(viStart);
-						imgLoader.loadRange(viStart, prevVisFirst-1, context);
-					}
-					if(prevVisLast<visLast){ // bottom
-						//imgLoader.loadSingleItem(visLast);
-						if(visLast-prevVisLast<(visibleItemCount)*4)
-							imgLoader.loadRange(prevVisLast+1, visLast, context);
-					}
-					if(prevVisLast>visLast){
-						imgLoader.cancelRange(visLast+1, prevVisLast);
-					}
-					if(prevVisFirst<viStart){
-						imgLoader.cancelRange(prevVisFirst, viStart-1);
-					}
 				}
+				reloadVisibleImages();
 			}else{
 				if(!wasFastScrolling)
 					imgLoader.cancelAll();
 				wasFastScrolling=true;
 				imgLoader.setIsScrolling(true);
 			}
-			lastChangeTime=System.currentTimeMillis();
+			lastChangeTime=now;
 			prevVisFirst=viStart;
-			prevVisLast=visLast;
+			prevVisLast=lastVisibleItem;
 		}
 
 		if(firstVisibleItem+visibleItemCount>=totalItemCount-1 && visibleItemCount!=0 && totalItemCount!=0){
@@ -281,31 +289,21 @@ public class ListImageLoaderWrapper{
 		lastScrollState=scrollState;
 		if(scrollState==RecyclerView.SCROLL_STATE_IDLE && listener!=null) listener.onScrollStopped();
 		if(scrollState==RecyclerView.SCROLL_STATE_DRAGGING && listener!=null) listener.onScrollStarted();
-		/*if(scrollState==SCROLL_STATE_TOUCH_SCROLL){
-			imgLoader.cancelAll();
-		}*/
 		if(scrollState==RecyclerView.SCROLL_STATE_IDLE/* && wasFastScrolling*/){
 			imgLoader.setIsScrolling(false);
+			velocityTrackerX.resetTracking();
+			velocityTrackerY.resetTracking();
+			scrollOffsetX=scrollOffsetY=0;
 			//Log.w(TAG, "Scroll state idle, loading");
 			wasFastScrolling=false;
 			if(viCount<=0)
 				return;
-			imgLoader.preparePartialCancel();
-			imgLoader.loadRange(viStart, viStart+viCount, context);
-			if(lastScrollFwd){
-				imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-				imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-			}else{
-				imgLoader.loadRange(viStart-Math.round(viCount*prefetchScreens), viStart+viCount, context);
-				imgLoader.loadRange(viStart+viCount, viStart+viCount+Math.round(viCount*prefetchScreens), context);
-			}
-			imgLoader.commitPartialCancel();
+			reloadVisibleImages();
 		}else{
 			if(loadRunnable!=null){
 				list.removeCallbacks(loadRunnable);
 				loadRunnable=null;
 			}
-			//imgLoader.setIsScrolling(true);
 		}
 	}
 

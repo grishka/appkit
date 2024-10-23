@@ -99,9 +99,11 @@ public class ImageCache{
 				@Override
 				protected void entryRemoved(boolean evicted, String key, Drawable oldValue, Drawable newValue){
 					if(newValue!=null) return;
-					for(WeakReference<ListImageLoaderWrapper> ref:instance.registeredLoaders){
-						if(ref.get()!=null)
-							ref.get().onCacheEntryRemoved(key);
+					synchronized(instance.registeredLoaders){
+						for(WeakReference<ListImageLoaderWrapper> ref:instance.registeredLoaders){
+							if(ref.get()!=null)
+								ref.get().onCacheEntryRemoved(key);
+						}
 					}
 				}
 			};
@@ -179,13 +181,15 @@ public class ImageCache{
 				try {
 					diskCache = DiskLruCache.open(new File(appContext.getCacheDir(), "images"), 1, 1, params.diskCacheSize);
 					if(DEBUG) Log.i(TAG, "Done opening disk cache");
-					for(WeakReference<ListImageLoaderWrapper> ref:registeredLoaders){
-						ListImageLoaderWrapper loader=ref.get();
-						if(loader!=null){
-							if(DEBUG) Log.d(TAG, "Calling updateImages() on "+loader);
-							loader.updateImages();
-						}else if(DEBUG){
-							Log.d(TAG, "A registered ListImageLoaderWrapper reference was null");
+					synchronized(registeredLoaders){
+						for(WeakReference<ListImageLoaderWrapper> ref:registeredLoaders){
+							ListImageLoaderWrapper loader=ref.get();
+							if(loader!=null){
+								if(DEBUG) Log.d(TAG, "Calling updateImages() on "+loader);
+								loader.updateImages();
+							}else if(DEBUG){
+								Log.d(TAG, "A registered ListImageLoaderWrapper reference was null");
+							}
 						}
 					}
 					diskCacheLock.notifyAll();
@@ -221,12 +225,14 @@ public class ImageCache{
 	}
 
 	public void registerLoader(ListImageLoaderWrapper loader){
-		registeredLoaders.add(new WeakReference<>(loader));
-		Iterator<WeakReference<ListImageLoaderWrapper>> itr=registeredLoaders.iterator();
-		while(itr.hasNext()){
-			WeakReference<ListImageLoaderWrapper> ref=itr.next();
-			if(ref.get()==null)
-				itr.remove();
+		synchronized(registeredLoaders){
+			registeredLoaders.add(new WeakReference<>(loader));
+			Iterator<WeakReference<ListImageLoaderWrapper>> itr=registeredLoaders.iterator();
+			while(itr.hasNext()){
+				WeakReference<ListImageLoaderWrapper> ref=itr.next();
+				if(ref.get()==null)
+					itr.remove();
+			}
 		}
 	}
 

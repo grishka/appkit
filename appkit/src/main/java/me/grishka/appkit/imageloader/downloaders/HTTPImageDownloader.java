@@ -40,13 +40,15 @@ public class HTTPImageDownloader extends ImageDownloader {
 
 	@Override
 	public void downloadFile(ImageLoaderRequest _req, OutputStream out, ImageCache.ProgressCallback callback, ImageCache.ImageDownloadInfo info, Runnable onSuccess, Consumer<Throwable> onError){
-		if(httpClient==null){
-			httpClient=new OkHttpClient.Builder()
-					.connectTimeout(15, TimeUnit.SECONDS)
-					.readTimeout(15, TimeUnit.SECONDS)
-					.writeTimeout(15, TimeUnit.SECONDS)
-					.cache(null)
-					.build();
+		synchronized(this){
+			if(httpClient==null){
+				httpClient=new OkHttpClient.Builder()
+						.connectTimeout(15, TimeUnit.SECONDS)
+						.readTimeout(15, TimeUnit.SECONDS)
+						.writeTimeout(15, TimeUnit.SECONDS)
+						.cache(null)
+						.build();
+			}
 		}
 		UrlImageLoaderRequest req=(UrlImageLoaderRequest)_req;
 		Request hreq=new Request.Builder().url(req.uri.toString()).header("User-Agent", NetworkUtils.getUserAgent()).build();

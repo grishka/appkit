@@ -25,7 +25,8 @@ public class ListImageLoader {
 	private boolean isScrolling;
 	private final Handler mainThreadHandler;
 	private final LongSparseArray<String> loadedRequests=new LongSparseArray<>(10);
-	private LongSparseArray<RunnableTask> pendingPartialCancel;
+	private final LongSparseArray<RunnableTask> pendingPartialCancel=new LongSparseArray<>();
+	private boolean partialCancellationPending;
 	private HashSet<Long> failedRequests=new HashSet<>();
 
 	public ListImageLoader(){
@@ -73,7 +74,7 @@ public class ListImageLoader {
 				}
 				if(req==null)
 					continue;
-				if(pendingPartialCancel!=null){
+				if(partialCancellationPending){
 					RunnableTask t=pendingPartialCancel.get(makeIndex(item, i));
 					if(t!=null && t.req.equals(req)){
 						pendingPartialCancel.remove(makeIndex(item, i));
@@ -98,7 +99,6 @@ public class ListImageLoader {
 				task.item=item;
 				task.image=i;
 				task.req=req;
-//				task.set=!isScrolling;
 				task.set=true;
 				task.context=context;
 				if(DEBUG) Log.v(TAG, "Added task: "+task);
@@ -222,9 +222,9 @@ public class ListImageLoader {
 	}
 
 	public synchronized void preparePartialCancel(){
-		if(pendingPartialCancel!=null)
+		if(partialCancellationPending)
 			throw new IllegalStateException("There's already a pending partial cancellation");
-		pendingPartialCancel=new LongSparseArray<>();
+		partialCancellationPending=true;
 		for(RunnableTask t:incomplete){
 			pendingPartialCancel.put(makeIndex(t.item, t.image), t);
 		}
@@ -232,7 +232,7 @@ public class ListImageLoader {
 	}
 
 	public void commitPartialCancel(){
-		if(pendingPartialCancel==null)
+		if(!partialCancellationPending)
 			throw new IllegalStateException("There's no pending partial cancellation");
 		for(int i=0;i<pendingPartialCancel.size();i++){
 			RunnableTask t=pendingPartialCancel.valueAt(i);
@@ -240,7 +240,8 @@ public class ListImageLoader {
 			t.cancel();
 		}
 		if(DEBUG) Log.w(TAG, "Partial cancellation completed, canceled "+pendingPartialCancel.size()+" tasks");
-		pendingPartialCancel=null;
+		pendingPartialCancel.clear();
+		partialCancellationPending=false;
 	}
 	
 	public synchronized void setIsScrolling(boolean s){
