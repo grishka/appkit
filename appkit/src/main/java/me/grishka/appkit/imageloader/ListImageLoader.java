@@ -327,6 +327,8 @@ public class ListImageLoader {
 						if(DEBUG) Log.v(TAG, "Failed: "+RunnableTask.this+" with "+error);
 						synchronized(ListImageLoader.this){
 							incomplete.remove(RunnableTask.this);
+							if(canceled)
+								return;
 							failedRequests.add(makeIndex(item, image));
 						}
 						mainThreadHandler.post(()->adapter.imageLoadingFailed(item, image, error));
