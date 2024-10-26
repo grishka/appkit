@@ -137,7 +137,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 			}else if(e.getAction()==MotionEvent.ACTION_UP || e.getAction()==MotionEvent.ACTION_CANCEL || getScrollState()!=SCROLL_STATE_IDLE){
 				trackingTouch=false;
 				if(didClick && !didHighlight){
-					showHighlight();
+					showHighlight(e);
 					postDelayed(this::endClick, 32);
 				}else{
 					endClick();
@@ -325,11 +325,12 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		}
 	}
 
-	private void showHighlight(){
+	private void showHighlight(MotionEvent ev){
 		if(clickingViewHolder!=null){
 			didHighlight=true;
 			if(highlight!=null)
 				highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
+			clickingViewHolder.itemView.drawableHotspotChanged(ev.getX()-clickingViewHolder.itemView.getX(), ev.getY()-clickingViewHolder.itemView.getY());
 			clickingViewHolder.itemView.setPressed(true);
 			invalidate();
 		}
@@ -551,7 +552,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 
 		@Override
 		public void onShowPress(MotionEvent e){
-			showHighlight();
+			showHighlight(e);
 		}
 
 		@Override
