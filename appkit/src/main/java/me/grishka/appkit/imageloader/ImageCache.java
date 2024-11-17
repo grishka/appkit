@@ -19,6 +19,7 @@ import android.util.Log;
 import android.util.LruCache;
 import android.util.Size;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -327,17 +328,29 @@ public class ImageCache{
 				}
 				return;
 			}
-			final DiskLruCache.Editor editor=diskCache.edit(diskKey);
-			if(editor==null){
-				throw new IllegalStateException("Another thread has this file open -- should never happen");
-			}
-			OutputStream out=new FileOutputStream(editor.getFile(0));
-			downloader.downloadFile(req, out, pc, dlInfo, ()->{
+			ByteArrayOutputStream memoryOut=new ByteArrayOutputStream();
+			downloader.downloadFile(req, memoryOut, pc, dlInfo, ()->{
 				try{
-					out.close();
-					editor.commit();
 					if(dlInfo.canceled)
 						return;
+					DiskLruCache.Editor editor = null;
+					try {
+						editor = diskCache.edit(diskKey);
+						if (editor == null) {
+							throw new IllegalStateException("Another thread has this file open -- should never happen");
+						}
+						editor.getFile(0);
+						try (FileOutputStream diskOut = new FileOutputStream(editor.getFile(0))) {
+							diskOut.write(memoryOut.toByteArray());
+						}
+						editor.commit();
+					} catch (IOException x) {
+						if (editor != null) {
+							editor.abort();
+						}
+						Log.w(TAG, "Failed to write to disk cache", x);
+						throw x;
+					}
 					DiskLruCache.Value value=diskCache.get(diskKey);
 					if(dlInfo.needDecode()){
 						if(value!=null){
@@ -362,8 +375,6 @@ public class ImageCache{
 				}
 			}, err->{
 				try{
-					out.close();
-					editor.abort();
 					diskCache.remove(diskKey);
 				}catch(IOException x){
 					Log.e(TAG, "Failed to remove a failed download from disk cache", x);
