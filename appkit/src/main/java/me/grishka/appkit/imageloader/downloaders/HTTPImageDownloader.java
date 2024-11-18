@@ -11,6 +11,7 @@ import me.grishka.appkit.imageloader.requests.UrlImageLoaderRequest;
 import me.grishka.appkit.utils.NetworkUtils;
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -22,6 +23,8 @@ import okio.Sink;
  * Created by grishka on 28.07.15.
  */
 public class HTTPImageDownloader extends ImageDownloader {
+	public static final int MAX_INFLIGHT_HOST = 5;
+	public static final int MAX_INFLIGHT_TOTAL = 10;
 	private OkHttpClient httpClient;
 
 	@Override
@@ -42,6 +45,9 @@ public class HTTPImageDownloader extends ImageDownloader {
 	public void downloadFile(ImageLoaderRequest _req, OutputStream out, ImageCache.ProgressCallback callback, ImageCache.ImageDownloadInfo info, Runnable onSuccess, Consumer<Throwable> onError){
 		synchronized(this){
 			if(httpClient==null){
+				Dispatcher dispatcher=new Dispatcher();
+				dispatcher.setMaxRequestsPerHost(MAX_INFLIGHT_HOST);
+				dispatcher.setMaxRequests(MAX_INFLIGHT_TOTAL);
 				httpClient=new OkHttpClient.Builder()
 						.connectTimeout(15, TimeUnit.SECONDS)
 						.readTimeout(15, TimeUnit.SECONDS)

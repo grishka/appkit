@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 import me.grishka.appkit.imageloader.disklrucache.DiskLruCache;
@@ -62,6 +63,7 @@ public class ImageCache{
 	private static ImageCache instance=null;
 	private static Parameters params=new Parameters();
 	private static final ArrayList<ImageDownloader> downloaders=new ArrayList<>();
+	private final Semaphore inflightDownloads = new Semaphore(HTTPImageDownloader.MAX_INFLIGHT_TOTAL + 5);
 
 	private static final String TAG="AppKit_ImageCache";
 
@@ -272,6 +274,7 @@ public class ImageCache{
 	private void getInternal(ImageLoaderRequest req, ProgressCallback pc, final ImageDownloadInfo dlInfo, final PendingImageRequest pendingRequest){
 		String memKey=req.getMemoryCacheKey();
 		String diskKey=req.getDiskCacheKey();
+		boolean acquired = false;
 		try{
 			Drawable bmp=cache.get(memKey);
 			if(bmp!=null){
@@ -327,12 +330,20 @@ public class ImageCache{
 				}
 				return;
 			}
+			inflightDownloads.acquire();
+			acquired = true;
+			if (dlInfo.canceled) {
+				inflightDownloads.release();
+				return;
+			}
 			final DiskLruCache.Editor editor=diskCache.edit(diskKey);
 			if(editor==null){
+				inflightDownloads.release();
 				throw new IllegalStateException("Another thread has this file open -- should never happen");
 			}
 			OutputStream out=new FileOutputStream(editor.getFile(0));
 			downloader.downloadFile(req, out, pc, dlInfo, ()->{
+				inflightDownloads.release();
 				try{
 					out.close();
 					editor.commit();
@@ -361,6 +372,7 @@ public class ImageCache{
 					invokeFailureCallbacks(req, x);
 				}
 			}, err->{
+				inflightDownloads.release();
 				try{
 					out.close();
 					editor.abort();
@@ -371,8 +383,10 @@ public class ImageCache{
 				if(!dlInfo.canceled)
 					invokeFailureCallbacks(req, err);
 			});
-
 		}catch(Throwable x){
+			if (acquired) {
+				inflightDownloads.release();
+			}
 			Log.w(TAG, req.toString(), x);
 			invokeFailureCallbacks(req, x);
 		}
