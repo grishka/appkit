@@ -1,15 +1,18 @@
 package me.grishka.appkit.imageloader;
 
 import android.content.Context;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 import androidx.collection.LongSparseArray;
@@ -21,13 +24,13 @@ public class ListImageLoader {
 	private static final String TAG="appkit-img-loader";
 
 	private volatile ListImageLoaderAdapter adapter;
-	private final ArrayList<RunnableTask> incomplete=new ArrayList<>();
+	private final ConcurrentSkipListSet<RunnableTask> incomplete=new ConcurrentSkipListSet<>();
 	private boolean isScrolling;
 	private final Handler mainThreadHandler;
-	private final LongSparseArray<String> loadedRequests=new LongSparseArray<>(10);
+	private final ConcurrentSkipListMap<Long, String> loadedRequests=new ConcurrentSkipListMap<>();
 	private final LongSparseArray<RunnableTask> pendingPartialCancel=new LongSparseArray<>();
 	private boolean partialCancellationPending;
-	private HashSet<Long> failedRequests=new HashSet<>();
+	private ConcurrentSkipListSet<Long> failedRequests=new ConcurrentSkipListSet<>();
 
 	public ListImageLoader(){
 		mainThreadHandler=new Handler(Looper.getMainLooper());
@@ -66,11 +69,9 @@ public class ListImageLoader {
 			int cnt=adapter.getImageCountForItem(item);
 			for(int i=0;i<cnt;i++){
 				ImageLoaderRequest req=adapter.getImageRequest(item, i);
-				synchronized(this){
-					if(failedRequests.contains(makeIndex(item, i))){
-						if(DEBUG) Log.v(TAG, "not loading "+item+", "+i+" because it failed previously");
-						continue;
-					}
+				if(failedRequests.contains(makeIndex(item, i))){
+					if(DEBUG) Log.v(TAG, "not loading "+item+", "+i+" because it failed previously");
+					continue;
 				}
 				if(req==null)
 					continue;
@@ -85,7 +86,8 @@ public class ListImageLoader {
 				}
 				if(isLoading(item, i))
 					continue;
-				if(req.getMemoryCacheKey().equals(loadedRequests.get(makeIndex(item, i))) || force){
+
+				if(force || loadedRequests.containsValue(req.getMemoryCacheKey())){
 					if(ImageCache.getInstance(context).isInTopCache(req)){ // (in)sanity check
 						if(DEBUG) Log.v(TAG, "Image ["+item+"/"+i+"] already loaded; skipping");
 						adapter.imageLoaded(item, i, ImageCache.getInstance(context).getFromTop(req));
@@ -102,9 +104,7 @@ public class ListImageLoader {
 				task.set=true;
 				task.context=context;
 				if(DEBUG) Log.v(TAG, "Added task: "+task);
-				synchronized(this){
-					incomplete.add(task);
-				}
+				incomplete.add(task);
 				task.run();
 			}
 		}catch(Exception x){
@@ -156,7 +156,7 @@ public class ListImageLoader {
 			}
 		}
 		if(!failedRequests.isEmpty()){
-			HashSet<Long> newFailedRequests=new HashSet<>();
+			ConcurrentSkipListSet<Long> newFailedRequests=new ConcurrentSkipListSet<>();
 			for(long index:failedRequests){
 				int pos=getPosition(index);
 				if(pos>=start && pos<end){
@@ -270,15 +270,17 @@ public class ListImageLoader {
 	}
 
 	/*package*/ synchronized void onCacheEntryRemoved(String key){
-		int index;
-		while((index=loadedRequests.indexOfValue(key))>=0){
-			long x=loadedRequests.keyAt(index);
-			loadedRequests.removeAt(index);
-			if(DEBUG) Log.i(TAG, "Removed cache entry for ["+getPosition(x)+"/"+getImage(x)+"] "+key);
+		//TODO still slow, need to investigate and possibly keep mapping in the other direction
+		for(Map.Entry<Long, String> entry : loadedRequests.entrySet()){
+			if (entry.getValue().equals(key)) {
+				if(DEBUG) Log.i(TAG, "Removed cache entry for ["+getPosition(entry.getKey())+"/"+getImage(entry.getKey())+"] "+key);
+				loadedRequests.remove(entry.getKey());
+				return;
+			}
 		}
 	}
 	
-	private class RunnableTask implements Runnable{
+	private class RunnableTask implements Runnable, Comparable<RunnableTask> {
 		public int item, image;
 		public ImageLoaderRequest req;
 		public boolean canceled=false;
@@ -302,6 +304,9 @@ public class ListImageLoader {
 				pendingRequest=ImageCache.getInstance(context).get(req, null, new ImageLoaderCallback(){
 					@Override
 					public void onImageLoaded(ImageLoaderRequest req, Drawable bmp){
+						if (bmp instanceof BitmapDrawable) {
+							//((BitmapDrawable) bmp).getBitmap().prepareToDraw();
+						}
 						if(set){
 							mainThreadHandler.post(()->{
 								if(set && !canceled){
@@ -347,6 +352,11 @@ public class ListImageLoader {
 		
 		public String toString(){
 			return "["+item+"/"+image+"] "+req;
+		}
+
+		@Override
+		public int compareTo(RunnableTask runnableTask) {
+			return item;
 		}
 	}
 }
