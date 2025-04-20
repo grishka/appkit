@@ -321,6 +321,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 			clickingViewHolder.itemView.setPressed(false);
 			if(highlight!=null)
 				highlight.setState(ENABLED_STATE_SET);
+			clickingViewHolder.itemView.setHasTransientState(false);
 			clickingViewHolder=null;
 		}
 	}
@@ -527,6 +528,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 						enabled=((DisableableClickable) holder).isEnabled();
 					if(enabled){
 						clickingViewHolder=holder;
+						clickingViewHolder.itemView.setHasTransientState(true);
 						highlightedView=holder.itemView;
 						return true;
 					}
