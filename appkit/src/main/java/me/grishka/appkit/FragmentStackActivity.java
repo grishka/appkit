@@ -316,6 +316,8 @@ public class FragmentStackActivity extends Activity{
 	}
 
 	private void onPredictiveBackInvoked(){
+		if(instanceStateSaved)
+			return;
 		if(fragmentContainers.size()>1){
 			Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
 			removeFragment(currentFragment, true);
