@@ -20,6 +20,7 @@ import android.view.ViewGroup;
 import java.util.ArrayList;
 
 import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 import me.grishka.appkit.imageloader.ImageLoaderViewHolder;
@@ -96,6 +97,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	private boolean didHighlight, didClick;
 	private boolean includeMarginsInItemHitbox;
 	private Rect tmpRect=new Rect();
+	private float lastTouchX, lastTouchY;
 
 	public UsableRecyclerView(Context context) {
 		super(context);
@@ -120,10 +122,16 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		setRecycledViewPool(new AutoAssignMaxRecycledViewPool(25));
 
 		gestureDetector=new GestureDetector(getContext(), new ItemTapGestureListener());
+		addRecyclerListener(holder->{
+			if(holder.itemView==highlightedView)
+				highlightedView=null;
+		});
 	}
 
 	@Override
 	public boolean onTouchEvent(MotionEvent e) {
+		lastTouchX=e.getX();
+		lastTouchY=e.getY();
 		if(highlight!=null){
 			highlight.setHotspot(e.getX(), e.getY());
 		}
@@ -153,6 +161,8 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	public void setSelector(Drawable selector){
+		if(highlight==selector)
+			return;
 		if(highlight!=null){
 			highlight.setCallback(null);
 		}
@@ -160,6 +170,9 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		if(highlight==null)
 			return;
 		highlight.setCallback(this);
+		highlight.setHotspot(lastTouchX, lastTouchY);
+		if(highlightedView!=null)
+			highlight.setState(PRESSED_ENABLED_STATE_SET);
 	}
 
 	public void setDrawSelectorOnTop(boolean drawOnTop){
@@ -182,7 +195,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		if(highlight!=null) {
 			if (highlightedView!=null) {
 				if(highlightBoundsProvider!=null){
-					highlightBoundsProvider.getSelectorBounds(highlightedView, highlightBounds);
+					highlightBoundsProvider.getSelectorBounds(highlightedView, lastTouchX, lastTouchY, highlightBounds);
 				}else{
 					if(includeMarginsInItemHitbox){
 						getDecoratedBoundsWithMargins(highlightedView, highlightBounds);
@@ -330,7 +343,7 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 		if(clickingViewHolder!=null){
 			didHighlight=true;
 			if(highlight!=null)
-				highlight.setState(PRESSED_ENABLED_FOCUSED_STATE_SET);
+				highlight.setState(PRESSED_ENABLED_STATE_SET);
 			clickingViewHolder.itemView.drawableHotspotChanged(ev.getX()-clickingViewHolder.itemView.getX(), ev.getY()-clickingViewHolder.itemView.getY());
 			clickingViewHolder.itemView.setPressed(true);
 			invalidate();
@@ -508,7 +521,10 @@ public class UsableRecyclerView extends RecyclerView implements ObservableListIm
 	}
 
 	public interface SelectorBoundsProvider{
-		public void getSelectorBounds(View view, Rect outRect);
+		void getSelectorBounds(View view, Rect outRect);
+		default void getSelectorBounds(View view, float x, float y, Rect outRect){
+			getSelectorBounds(view, outRect);
+		}
 	}
 
 	private class ItemTapGestureListener implements GestureDetector.OnGestureListener{
