@@ -1,13 +1,12 @@
 package me.grishka.appkit.imageloader.downloaders;
 
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.function.Consumer;
 
 import me.grishka.appkit.imageloader.ImageCache;
+import me.grishka.appkit.imageloader.OutputStreamSupplier;
 import me.grishka.appkit.imageloader.requests.ImageLoaderRequest;
 
 /**
@@ -28,7 +27,7 @@ public abstract class ImageDownloader{
 	 * @param req the request
 	 * @param to an output stream into which the image should be written
 	 */
-	public void downloadFile(ImageLoaderRequest req, OutputStream to, ImageCache.ProgressCallback callback, ImageCache.ImageDownloadInfo info, Runnable onSuccess, Consumer<Throwable> onError){
+	public void downloadFile(ImageLoaderRequest req, OutputStreamSupplier to, ImageCache.ProgressCallback callback, ImageCache.ImageDownloadInfo info, Runnable onSuccess, Consumer<Throwable> onError){
 	}
 
 	/**

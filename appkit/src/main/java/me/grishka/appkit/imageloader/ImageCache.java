@@ -327,15 +327,25 @@ public class ImageCache{
 				}
 				return;
 			}
-			final DiskLruCache.Editor editor=diskCache.edit(diskKey);
-			if(editor==null){
-				throw new IllegalStateException("Another thread has this file open -- should never happen");
-			}
-			OutputStream out=new FileOutputStream(editor.getFile(0));
-			downloader.downloadFile(req, out, pc, dlInfo, ()->{
+
+			final DiskCacheFileHolder holder=new DiskCacheFileHolder();
+
+			downloader.downloadFile(req, ()->{
+				if(holder.outputStream!=null)
+					return holder.outputStream;
+
+				holder.editor=diskCache.edit(diskKey);
+				if(holder.editor==null){
+					throw new IllegalStateException("Another thread has this file open -- should never happen");
+				}
+				holder.outputStream=new FileOutputStream(holder.editor.getFile(0));
+				return holder.outputStream;
+			}, pc, dlInfo, ()->{
 				try{
-					out.close();
-					editor.commit();
+					if(holder.outputStream!=null){
+						holder.outputStream.close();
+						holder.editor.commit();
+					}
 					if(dlInfo.canceled)
 						return;
 					DiskLruCache.Value value=diskCache.get(diskKey);
@@ -362,8 +372,10 @@ public class ImageCache{
 				}
 			}, err->{
 				try{
-					out.close();
-					editor.abort();
+					if(holder.outputStream!=null)
+						holder.outputStream.close();
+					if(holder.editor!=null)
+						holder.editor.abort();
 					diskCache.remove(diskKey);
 				}catch(IOException x){
 					Log.e(TAG, "Failed to remove a failed download from disk cache", x);
@@ -685,5 +697,10 @@ public class ImageCache{
 		public void setDecode(boolean decode){
 			this.decode=decode;
 		}
+	}
+
+	private static class DiskCacheFileHolder{
+		public DiskLruCache.Editor editor;
+		public FileOutputStream outputStream;
 	}
 }
