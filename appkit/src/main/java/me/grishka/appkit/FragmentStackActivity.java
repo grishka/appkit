@@ -304,8 +304,11 @@ public class FragmentStackActivity extends Activity{
 	@Override
 	public void onBackPressed(){
 		if(!fragmentBackCallbacks.isEmpty()){
-			fragmentBackCallbacks.get(fragmentBackCallbacks.size()-1).callback.run();
-			return;
+			BackCallbackRecord topCallback=fragmentBackCallbacks.get(fragmentBackCallbacks.size()-1);
+			if(topCallback.fragment.isVisible()){
+				topCallback.callback.run();
+				return;
+			}
 		}
 		if(fragmentContainers.size()>1){
 			Fragment currentFragment=getFragmentManager().findFragmentById(fragmentContainers.get(fragmentContainers.size()-1).getId());
@@ -313,6 +316,11 @@ public class FragmentStackActivity extends Activity{
 			return;
 		}
 		super.onBackPressed();
+	}
+
+	private Fragment getTopParent(Fragment fragment){
+		Fragment parent=fragment.getParentFragment();
+		return parent!=null ? getTopParent(parent) : fragment;
 	}
 
 	private void onPredictiveBackInvoked(){
@@ -464,7 +472,7 @@ public class FragmentStackActivity extends Activity{
 		}
 	}
 
-	public void addBackCallback(Runnable callback){
+	public void addBackCallback(Fragment fragment, Runnable callback){
 		for(BackCallbackRecord bcr:fragmentBackCallbacks){
 			if(bcr.callback==callback){
 				fragmentBackCallbacks.remove(bcr);
@@ -474,7 +482,7 @@ public class FragmentStackActivity extends Activity{
 				break;
 			}
 		}
-		BackCallbackRecord bcr=new BackCallbackRecord(callback);
+		BackCallbackRecord bcr=new BackCallbackRecord(getTopParent(fragment), callback);
 		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
 			bcr.nativeCallback=(OnBackInvokedCallback) callback::run;
 			getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, (OnBackInvokedCallback) bcr.nativeCallback);
@@ -552,9 +560,11 @@ public class FragmentStackActivity extends Activity{
 	private static class BackCallbackRecord{
 		public Runnable callback;
 		public Object nativeCallback;
+		public Fragment fragment;
 
-		public BackCallbackRecord(Runnable callback){
+		public BackCallbackRecord(Fragment fragment, Runnable callback){
 			this.callback=callback;
+			this.fragment=fragment;
 		}
 	}
 }

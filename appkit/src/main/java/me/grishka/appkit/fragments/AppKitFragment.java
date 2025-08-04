@@ -578,7 +578,7 @@ public class AppKitFragment extends DialogFragment implements WindowInsetsAwareF
 
 	protected void addBackCallback(Runnable callback){
 		if(getActivity() instanceof FragmentStackActivity fsa)
-			fsa.addBackCallback(callback);
+			fsa.addBackCallback(this, callback);
 	}
 
 	protected void removeBackCallback(Runnable callback){
