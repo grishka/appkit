@@ -484,15 +484,13 @@ public class ImageCache{
 				drawable=new MovieDrawable(movie);
 			}else{
 				int sampleSize=1;
-				int w=req.desiredMaxWidth;
-				int h=req.desiredMaxHeight;
-				if(w!=0 || h!=0){
-					if(w!=0 && h!=0){
-						sampleSize=Math.max((int) Math.floor(opts1.outWidth/(float) w), (int) Math.floor(opts1.outHeight/(float) h));
-					}else if(w!=0){
-						sampleSize=(int) Math.floor(opts1.outWidth/(float) w);
-					}else if(h!=0){
-						sampleSize=(int) Math.floor(opts1.outHeight/(float) h);
+				if(req.desiredMaxWidth!=0 || req.desiredMaxHeight!=0){
+					if(req.desiredMaxWidth!=0 && req.desiredMaxHeight!=0){
+						sampleSize=Math.max(1, Math.max((int) Math.floor(opts1.outWidth/(float) req.desiredMaxWidth), (int) Math.floor(opts1.outHeight/(float) req.desiredMaxHeight)));
+					}else if(req.desiredMaxWidth!=0){
+						sampleSize=Math.max(1, (int) Math.floor(opts1.outWidth/(float) req.desiredMaxWidth));
+					}else if(req.desiredMaxHeight!=0){
+						sampleSize=Math.max(1, (int) Math.floor(opts1.outHeight/(float) req.desiredMaxHeight));
 					}
 				}
 
@@ -508,14 +506,25 @@ public class ImageCache{
 						bmp=BitmapFactory.decodeStream(in, null, opts);
 					}
 				}
-				if(w!=0){
-					int dw=w;
-					int dh=Math.round((float) bmp.getHeight()/bmp.getWidth()*w);
-					bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
-				}else if(h!=0){
-					int dw=Math.round((float) bmp.getWidth()/bmp.getHeight()*h);
-					int dh=h;
-					bmp=Bitmap.createScaledBitmap(bmp, dw, dh, true);
+
+				int w=bmp.getWidth();
+				int h=bmp.getHeight();
+				int finalW=w, finalH=h;
+
+				if(req.desiredMaxHeight!=0 && req.desiredMaxWidth!=0 && (w>req.desiredMaxWidth || h>req.desiredMaxHeight)){
+					float ratio=Math.max(w/(float)req.desiredMaxWidth, h/(float)req.desiredMaxHeight);
+					finalW=Math.round(w/ratio);
+					finalH=Math.round(h/ratio);
+				}else if(req.desiredMaxHeight==0 && w>req.desiredMaxWidth){
+					finalW=req.desiredMaxWidth;
+					finalH=Math.round(req.desiredMaxWidth/(float)w*h);
+				}else if(req.desiredMaxWidth==0 && h>req.desiredMaxHeight){
+					finalW=Math.round(req.desiredMaxHeight/(float)h*w);
+					finalH=req.desiredMaxHeight;
+				}
+
+				if(finalW!=w || finalH!=h){
+					bmp=Bitmap.createScaledBitmap(bmp, finalW, finalH, true);
 				}
 
 				if(uri!=null && Build.VERSION.SDK_INT>=Build.VERSION_CODES.N){
