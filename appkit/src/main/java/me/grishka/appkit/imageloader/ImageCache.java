@@ -91,8 +91,8 @@ public class ImageCache{
 			instance.cache=new LruCache<>(cacheSize){
 				@Override
 				protected int sizeOf(String key, Drawable value){
-					if(value instanceof BitmapDrawable)
-						return ((BitmapDrawable) value).getBitmap().getAllocationByteCount();
+					if(value instanceof BitmapDrawable bd)
+						return bd.getBitmap().getAllocationByteCount();
 					return value.getIntrinsicWidth()*value.getIntrinsicHeight()*4; // probably very conservative
 				}
 
@@ -289,10 +289,10 @@ public class ImageCache{
 				ImageLoaderThreadPool.enqueueCachedTask(()->{
 					try{
 						Drawable img=downloader.getDrawable(req, dlInfo.needDecode(), dlInfo);
-						if(img!=null)
-							cache.put(memKey, img);
+						if(img==null)
+							throw new IllegalStateException("downloader.getDrawable returned null");
 						invokeCompletionCallbacks(req, img);
-					}catch(IOException x){
+					}catch(Throwable x){
 						invokeFailureCallbacks(req, x);
 					}
 				});
@@ -424,6 +424,8 @@ public class ImageCache{
 			boolean success=false;
 			try{
 				image=decodeImage(file, uri, req);
+				if(image==null)
+					throw new IllegalStateException("decodeImage returned null");
 				success=true;
 			}catch(Throwable x){
 				Log.w(TAG, "Failed to decode "+(file==null ? uri : file), x);
@@ -483,6 +485,8 @@ public class ImageCache{
 				Movie movie=Movie.decodeFile(file.getAbsolutePath());
 				drawable=new MovieDrawable(movie);
 			}else{
+				if(opts1.outWidth<1 || opts1.outHeight<1)
+					return null;
 				int sampleSize=1;
 				if(req.desiredMaxWidth!=0 || req.desiredMaxHeight!=0){
 					if(req.desiredMaxWidth!=0 && req.desiredMaxHeight!=0){
@@ -506,6 +510,8 @@ public class ImageCache{
 						bmp=BitmapFactory.decodeStream(in, null, opts);
 					}
 				}
+				if(bmp==null)
+					return null;
 
 				int w=bmp.getWidth();
 				int h=bmp.getHeight();
