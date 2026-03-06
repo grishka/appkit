@@ -19,6 +19,8 @@ public class SingleViewRecyclerAdapter extends RecyclerView.Adapter<SingleViewRe
 	@NonNull
 	@Override
 	public ViewViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType){
+		if(viewType!=id)
+			throw new IllegalStateException("Unexpected view type "+viewType+", expected "+id+" (view is "+view+")");
 		return new ViewViewHolder(view);
 	}
 

@@ -33,6 +33,7 @@ public class MergeRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.View
 		InternalDataObserver observer=new InternalDataObserver(adapter);
 		adapter.registerAdapterDataObserver(observer);
 		observers.put(adapter, observer);
+		viewTypeMapping.clear();
 		notifyDataSetChanged();
 	}
 
@@ -40,6 +41,7 @@ public class MergeRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.View
 		if(adapters.remove(adapter)){
 			adapter.unregisterAdapterDataObserver(observers.get(adapter));
 			observers.remove(adapter);
+			viewTypeMapping.clear();
 			notifyDataSetChanged();
 		}
 	}
@@ -54,6 +56,7 @@ public class MergeRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.View
 			observers.remove(adapter);
 		}
 		adapters.clear();
+		viewTypeMapping.clear();
 		notifyDataSetChanged();
 	}
 
