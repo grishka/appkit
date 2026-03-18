@@ -10,24 +10,38 @@ import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.TypedArray;
+import android.graphics.Canvas;
+import android.graphics.Outline;
+import android.graphics.Paint;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.FloatProperty;
+import android.util.Property;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.RoundedCorner;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.PathInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.window.BackEvent;
+import android.window.OnBackAnimationCallback;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import me.grishka.appkit.fragments.AppKitFragment;
 import me.grishka.appkit.fragments.CustomTransitionsFragment;
 import me.grishka.appkit.fragments.WindowInsetsAwareFragment;
@@ -35,7 +49,9 @@ import me.grishka.appkit.utils.CubicBezierInterpolator;
 import me.grishka.appkit.utils.V;
 
 public class FragmentStackActivity extends Activity{
-	protected FrameLayout content;
+	private static final String TAG="FragmentStackActivity";
+
+	protected FragmentStackContainer content;
 	protected ArrayList<FrameLayout> fragmentContainers=new ArrayList<>();
 	protected WindowInsets lastInsets;
 	protected ArrayList<Animator> runningAnimators=new ArrayList<>();
@@ -46,6 +62,7 @@ public class FragmentStackActivity extends Activity{
 	private int nextViewID=1;
 	private Object stackOnBackInvokedCallback;
 	private ArrayList<BackCallbackRecord> fragmentBackCallbacks=new ArrayList<>();
+	private View predictiveAnimCurrentFragmentView, predictiveAnimPrevFragmentView;
 
 	@Override
 	protected void onCreate(@Nullable Bundle savedInstanceState){
@@ -59,7 +76,9 @@ public class FragmentStackActivity extends Activity{
 		getWindow().setStatusBarColor(0);
 		getWindow().setNavigationBarColor(0);
 
-		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+			stackOnBackInvokedCallback=new PredictiveBackAnimationCallback();
+		}else if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
 			stackOnBackInvokedCallback=(OnBackInvokedCallback) this::onPredictiveBackInvoked;
 		}
 
@@ -430,18 +449,45 @@ public class FragmentStackActivity extends Activity{
 
 	protected Animator createFragmentExitTransition(View prev, View container){
 		AnimatorSet anim=new AnimatorSet();
-		anim.playTogether(
-				ObjectAnimator.ofFloat(container, View.TRANSLATION_X, V.dp(100)),
-				ObjectAnimator.ofFloat(container, View.ALPHA, 0)
-		);
+		List<Animator> anims=new ArrayList<>();
+		anims.add(ObjectAnimator.ofFloat(container, View.TRANSLATION_X, container.getTranslationX()+V.dp(100)));
+		anims.add(ObjectAnimator.ofFloat(container, View.ALPHA, 0));
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.UPSIDE_DOWN_CAKE && predictiveAnimPrevFragmentView!=null){
+			anims.add(ObjectAnimator.ofFloat(prev, View.TRANSLATION_X, 0));
+			anims.add(ObjectAnimator.ofFloat(prev, View.TRANSLATION_Y, 0));
+			anims.add(ObjectAnimator.ofFloat(prev, View.SCALE_X, 1));
+			anims.add(ObjectAnimator.ofFloat(prev, View.SCALE_Y, 1));
+			anims.add(ObjectAnimator.ofFloat(content, new FloatProperty<View>("fdafdsa"){
+				@Override
+				public Float get(View object){
+					return content.predictiveBackOverlayPaint.getAlpha()/255f;
+				}
+
+				@Override
+				public void setValue(View object, float value){
+					content.predictiveBackOverlayPaint.setAlpha(Math.round(255*value));
+					content.invalidate();
+				}
+			}, 0));
+			anim.addListener(new AnimatorListenerAdapter(){
+				@Override
+				public void onAnimationEnd(Animator animation){
+					predictiveAnimPrevFragmentView.setOutlineProvider(null);
+					predictiveAnimPrevFragmentView.setClipToOutline(false);
+					predictiveAnimPrevFragmentView=null;
+					content.setBackground(null);
+				}
+			});
+		}
+		anim.playTogether(anims);
 		anim.setDuration(200);
 		anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
 		return anim;
 	}
 
 	protected CharSequence getTitleForFragment(Fragment fragment){
-		if(fragment instanceof AppKitFragment){
-			return ((AppKitFragment) fragment).getTitle();
+		if(fragment instanceof AppKitFragment akf){
+			return akf.getTitle();
 		}
 		try{
 			int label=getPackageManager().getActivityInfo(getComponentName(), 0).labelRes;
@@ -511,6 +557,17 @@ public class FragmentStackActivity extends Activity{
 		return r;
 	}
 
+	protected int getPredictiveBackBackgroundColor(){
+		TypedArray ta=obtainStyledAttributes(new int[]{android.R.attr.statusBarColor});
+		int color=ta.getColor(0, 0xff00ff00);
+		ta.recycle();
+		return color;
+	}
+
+	protected int getPredictiveBackOverlayColor(){
+		return 0x80000000;
+	}
+
 	private class FragmentContainer extends FrameLayout{
 		public Fragment fragment;
 
@@ -530,7 +587,8 @@ public class FragmentStackActivity extends Activity{
 		}
 	}
 
-	private class FragmentStackContainer extends FrameLayout{
+	protected class FragmentStackContainer extends FrameLayout{
+		public Paint predictiveBackOverlayPaint=new Paint();
 
 		public FragmentStackContainer(@NonNull Context context){
 			super(context);
@@ -555,6 +613,15 @@ public class FragmentStackActivity extends Activity{
 		protected int getChildDrawingOrder(int childCount, int drawingPosition){
 			return childCount-drawingPosition-1;
 		}
+
+		@Override
+		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime){
+			boolean res=super.drawChild(canvas, child, drawingTime);
+			if(child==predictiveAnimPrevFragmentView){
+				canvas.drawRect(0, 0, getWidth(), getHeight(), predictiveBackOverlayPaint);
+			}
+			return res;
+		}
 	}
 
 	private static class BackCallbackRecord{
@@ -565,6 +632,113 @@ public class FragmentStackActivity extends Activity{
 		public BackCallbackRecord(Fragment fragment, Runnable callback){
 			this.callback=callback;
 			this.fragment=fragment;
+		}
+	}
+
+	@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+	private class PredictiveBackAnimationCallback implements OnBackAnimationCallback{
+		private PathInterpolator progressInterpolator=new PathInterpolator(0, 0, 0, 1);
+		private DecelerateInterpolator yOffsetInterpolator=new DecelerateInterpolator();
+		private float initialTouchY;
+		private Fragment prevFragment;
+
+		@Override
+		public void onBackInvoked(){
+			predictiveAnimCurrentFragmentView=null;
+			prevFragment=null;
+			onPredictiveBackInvoked();
+		}
+
+		@Override
+		public void onBackStarted(@NonNull BackEvent backEvent){
+			predictiveAnimCurrentFragmentView=fragmentContainers.get(fragmentContainers.size()-1);
+			Fragment fragment=getFragmentManager().findFragmentById(predictiveAnimCurrentFragmentView.getId());
+			if(fragment instanceof CustomTransitionsFragment){
+				// Don't do predictive back for fragments that customize transitions
+				predictiveAnimCurrentFragmentView=null;
+				return;
+			}
+			predictiveAnimPrevFragmentView=fragmentContainers.get(fragmentContainers.size()-2);
+			prevFragment=getFragmentManager().findFragmentById(predictiveAnimPrevFragmentView.getId());
+			getFragmentManager().beginTransaction().show(prevFragment).commit();
+			getFragmentManager().executePendingTransactions();
+			predictiveAnimPrevFragmentView.setVisibility(View.VISIBLE);
+			initialTouchY=backEvent.getTouchY();
+			float screenRadius=Math.min(
+					Math.min(getScreenCornerRadius(lastInsets, RoundedCorner.POSITION_TOP_LEFT), getScreenCornerRadius(lastInsets, RoundedCorner.POSITION_TOP_RIGHT)),
+					Math.min(getScreenCornerRadius(lastInsets, RoundedCorner.POSITION_BOTTOM_LEFT), getScreenCornerRadius(lastInsets, RoundedCorner.POSITION_BOTTOM_RIGHT))
+			);
+			ViewOutlineProvider clip=new ViewOutlineProvider(){
+				@Override
+				public void getOutline(View view, Outline outline){
+					outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), screenRadius);
+				}
+			};
+			predictiveAnimCurrentFragmentView.setOutlineProvider(clip);
+			predictiveAnimCurrentFragmentView.setClipToOutline(true);
+			predictiveAnimPrevFragmentView.setOutlineProvider(clip);
+			predictiveAnimPrevFragmentView.setClipToOutline(true);
+			content.setBackgroundColor(getPredictiveBackBackgroundColor());
+			content.predictiveBackOverlayPaint.setColor(getPredictiveBackOverlayColor());
+			update(backEvent);
+		}
+
+		@Override
+		public void onBackProgressed(@NonNull BackEvent backEvent){
+			if(predictiveAnimCurrentFragmentView==null)
+				return;
+			update(backEvent);
+		}
+
+		@Override
+		public void onBackCancelled(){
+			if(predictiveAnimCurrentFragmentView==null)
+				return;
+			resetView(predictiveAnimCurrentFragmentView);
+			predictiveAnimCurrentFragmentView=null;
+			predictiveAnimPrevFragmentView.setVisibility(View.GONE);
+			getFragmentManager().beginTransaction().hide(prevFragment).commit();
+			getFragmentManager().executePendingTransactions();
+			resetView(predictiveAnimPrevFragmentView);
+			predictiveAnimPrevFragmentView=null;
+			prevFragment=null;
+			content.setBackground(null);
+		}
+
+		private void resetView(View v){
+			v.setScaleX(1);
+			v.setScaleY(1);
+			v.setTranslationX(0);
+			v.setTranslationY(0);
+			v.setOutlineProvider(null);
+			v.setClipToOutline(false);
+		}
+
+		private void update(@NonNull BackEvent ev){
+			float progress=progressInterpolator.getInterpolation(ev.getProgress());
+			float scale=1f-progress*0.1f;
+			predictiveAnimCurrentFragmentView.setScaleX(scale);
+			predictiveAnimCurrentFragmentView.setScaleY(scale);
+			predictiveAnimPrevFragmentView.setScaleX(scale);
+			predictiveAnimPrevFragmentView.setScaleY(scale);
+			float transX=(content.getWidth()/20f-V.dp(8))*(ev.getSwipeEdge()==BackEvent.EDGE_RIGHT ? -1 : 1);
+			predictiveAnimCurrentFragmentView.setTranslationX(transX*progress);
+			predictiveAnimPrevFragmentView.setTranslationX(-content.getWidth()/5f);
+			float touchY=ev.getTouchY();
+			if(Float.isFinite(touchY)){
+				float touchOffset=Math.max(Math.min((touchY-initialTouchY)/(content.getHeight()/2f), 1f), -1f);
+				float interpolatedOffset=Math.copySign(yOffsetInterpolator.getInterpolation(Math.abs(touchOffset)), touchOffset);
+				float transY=(content.getHeight()/20f-V.dp(8))*interpolatedOffset*progress;
+				predictiveAnimCurrentFragmentView.setTranslationY(transY);
+				predictiveAnimPrevFragmentView.setTranslationY(transY);
+			}
+		}
+
+		private float getScreenCornerRadius(WindowInsets insets, int pos){
+			RoundedCorner corner=insets.getRoundedCorner(pos);
+			if(corner==null)
+				return 0;
+			return corner.getRadius();
 		}
 	}
 }
