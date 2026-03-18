@@ -448,17 +448,29 @@ public class FragmentStackActivity extends Activity{
 		AnimatorSet anim=new AnimatorSet();
 		anim.playTogether(
 				ObjectAnimator.ofFloat(container, View.ALPHA, 0f, 1f),
-				ObjectAnimator.ofFloat(container, View.TRANSLATION_X, V.dp(100), 0)
+				ObjectAnimator.ofFloat(container, View.TRANSLATION_X, content.getWidth()/5f, 0),
+				ObjectAnimator.ofFloat(prev, View.TRANSLATION_X, -content.getWidth()/5f)
 		);
 		anim.setDuration(300);
 		anim.setInterpolator(CubicBezierInterpolator.DEFAULT);
+		anim.addListener(new AnimatorListenerAdapter(){
+			@Override
+			public void onAnimationStart(Animator animation){
+				content.setBackgroundColor(getPredictiveBackBackgroundColor());
+			}
+
+			@Override
+			public void onAnimationEnd(Animator animation){
+				content.setBackground(null);
+			}
+		});
 		return anim;
 	}
 
 	protected Animator createFragmentExitTransition(View prev, View container){
 		AnimatorSet anim=new AnimatorSet();
 		List<Animator> anims=new ArrayList<>();
-		anims.add(ObjectAnimator.ofFloat(container, View.TRANSLATION_X, container.getTranslationX()+V.dp(100)));
+		anims.add(ObjectAnimator.ofFloat(container, View.TRANSLATION_X, container.getTranslationX()+content.getWidth()/5f));
 		anims.add(ObjectAnimator.ofFloat(container, View.ALPHA, 0));
 		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.UPSIDE_DOWN_CAKE && predictiveAnimPrevFragmentView!=null){
 			anims.add(ObjectAnimator.ofFloat(prev, View.TRANSLATION_X, 0));
@@ -483,6 +495,19 @@ public class FragmentStackActivity extends Activity{
 					predictiveAnimPrevFragmentView.setOutlineProvider(null);
 					predictiveAnimPrevFragmentView.setClipToOutline(false);
 					predictiveAnimPrevFragmentView=null;
+					content.setBackground(null);
+				}
+			});
+		}else{
+			anims.add(ObjectAnimator.ofFloat(prev, View.TRANSLATION_X, -content.getWidth()/5f, 0));
+			anim.addListener(new AnimatorListenerAdapter(){
+				@Override
+				public void onAnimationStart(Animator animation){
+					content.setBackgroundColor(getPredictiveBackBackgroundColor());
+				}
+
+				@Override
+				public void onAnimationEnd(Animator animation){
 					content.setBackground(null);
 				}
 			});
@@ -625,7 +650,7 @@ public class FragmentStackActivity extends Activity{
 		@Override
 		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime){
 			boolean res=super.drawChild(canvas, child, drawingTime);
-			if(child==predictiveAnimPrevFragmentView){
+			if(child==predictiveAnimPrevFragmentView && child.getScaleX()<1f){
 				canvas.drawRect(0, 0, getWidth(), getHeight(), predictiveBackOverlayPaint);
 			}
 			return res;
@@ -740,6 +765,7 @@ public class FragmentStackActivity extends Activity{
 				predictiveAnimCurrentFragmentView.setTranslationY(transY);
 				predictiveAnimPrevFragmentView.setTranslationY(transY);
 			}
+			content.invalidate();
 		}
 
 		private float getScreenCornerRadius(WindowInsets insets, int pos){
