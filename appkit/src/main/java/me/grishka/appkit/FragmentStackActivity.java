@@ -6,6 +6,7 @@ import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.Fragment;
+import android.app.FragmentContainer;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Context;
@@ -123,6 +124,18 @@ public class FragmentStackActivity extends Activity{
 		}
 	}
 
+	private void applySystemBarColorsForFragment(Fragment fragment){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){
+			if(fragment instanceof WindowInsetsAwareFragment waf){
+				applySystemBarColors(waf.wantsLightStatusBar(), waf.wantsLightNavigationBar());
+			}else{
+				TypedArray ta=obtainStyledAttributes(new int[]{android.R.attr.windowLightStatusBar, android.R.attr.windowLightNavigationBar});
+				applySystemBarColors(ta.getBoolean(0, false), ta.getBoolean(1, false));
+				ta.recycle();
+			}
+		}
+	}
+
 	public void showFragment(final Fragment fragment){
 		if(instanceStateSaved){
 			pendingFragmentAdditions.add(fragment);
@@ -136,14 +149,9 @@ public class FragmentStackActivity extends Activity{
 		fragmentContainers.add(wrap);
 		getFragmentManager().beginTransaction().add(wrap.getId(), fragment, "stackedFragment_"+wrap.getId()).commit();
 		getFragmentManager().executePendingTransactions();
-		final boolean lightStatus, lightNav;
-		if(fragment instanceof WindowInsetsAwareFragment){
+		if(fragment instanceof WindowInsetsAwareFragment waf){
 			if(lastInsets!=null)
-				((WindowInsetsAwareFragment) fragment).onApplyWindowInsets(new WindowInsets(lastInsets));
-			lightStatus=((WindowInsetsAwareFragment) fragment).wantsLightStatusBar();
-			lightNav=((WindowInsetsAwareFragment) fragment).wantsLightNavigationBar();
-		}else{
-			lightStatus=lightNav=false;
+				waf.onApplyWindowInsets(new WindowInsets(lastInsets));
 		}
 		if(fragmentContainers.size()>1){
 			wrap.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
@@ -152,10 +160,10 @@ public class FragmentStackActivity extends Activity{
 					wrap.getViewTreeObserver().removeOnPreDrawListener(this);
 
 					FrameLayout prevWrap=fragmentContainers.get(fragmentContainers.size()-2);
-					Animator anim;
+					Animator anim=null;
 					if(fragment instanceof CustomTransitionsFragment ctf)
 						anim=ctf.onCreateEnterTransition(prevWrap, wrap);
-					else
+					if(anim==null)
 						anim=createFragmentEnterTransition(prevWrap, wrap);
 					Runnable onEnd=()->{
 						for(int i=0; i<fragmentContainers.size()-1; i++){
@@ -195,7 +203,7 @@ public class FragmentStackActivity extends Activity{
 								}
 								if(alpha>=0.5f){
 									wrap.getViewTreeObserver().removeOnPreDrawListener(this);
-									applySystemBarColors(lightStatus, lightNav);
+									applySystemBarColorsForFragment(fragment);
 								}
 								prevAlpha=alpha;
 								return true;
@@ -203,13 +211,13 @@ public class FragmentStackActivity extends Activity{
 						});
 					}else{
 						onEnd.run();
-						applySystemBarColors(lightStatus, lightNav);
+						applySystemBarColorsForFragment(fragment);
 					}
 					return true;
 				}
 			});
 		}else{
-			applySystemBarColors(lightStatus, lightNav);
+			applySystemBarColorsForFragment(fragment);
 		}
 		setTitle(getTitleForFragment(fragment));
 	}
@@ -255,10 +263,10 @@ public class FragmentStackActivity extends Activity{
 			}else{
 				lightStatus=lightNav=false;
 			}
-			Animator anim;
+			Animator anim=null;
 			if(fragment instanceof CustomTransitionsFragment ctf)
 				anim=ctf.onCreateExitTransition(prevWrap, wrap);
-			else
+			if(anim==null)
 				anim=createFragmentExitTransition(prevWrap, wrap);
 			Runnable onEnd=()->{
 				getFragmentManager().beginTransaction().remove(fragment).commit();
@@ -653,7 +661,7 @@ public class FragmentStackActivity extends Activity{
 		public void onBackStarted(@NonNull BackEvent backEvent){
 			predictiveAnimCurrentFragmentView=fragmentContainers.get(fragmentContainers.size()-1);
 			Fragment fragment=getFragmentManager().findFragmentById(predictiveAnimCurrentFragmentView.getId());
-			if(fragment instanceof CustomTransitionsFragment){
+			if(fragment instanceof CustomTransitionsFragment ctf && !ctf.wantsPredictiveBackExitTransition()){
 				// Don't do predictive back for fragments that customize transitions
 				predictiveAnimCurrentFragmentView=null;
 				return;
