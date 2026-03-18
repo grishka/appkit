@@ -4,7 +4,6 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -24,7 +23,11 @@ import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
+import android.window.BackEvent;
+import android.window.OnBackAnimationCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import androidx.annotation.NonNull;
 import me.grishka.appkit.utils.CubicBezierInterpolator;
@@ -130,6 +133,41 @@ public class BottomSheet extends Dialog{
 				return true;
 			}
 		});
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+			getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, new OnBackAnimationCallback(){
+				private PathInterpolator progressInterpolator=new PathInterpolator(0, 0, 0, 1);
+
+				@Override
+				public void onBackInvoked(){
+					dismiss();
+				}
+
+				@Override
+				public void onBackCancelled(){
+					container.setScaleX(1);
+					container.setScaleY(1);
+				}
+
+				@Override
+				public void onBackProgressed(@NonNull BackEvent backEvent){
+					update(backEvent);
+				}
+
+				@Override
+				public void onBackStarted(@NonNull BackEvent backEvent){
+					container.setPivotX(container.getWidth()/2f);
+					container.setPivotY(container.getHeight());
+					update(backEvent);
+				}
+
+				private void update(@NonNull BackEvent ev){
+					float progress=progressInterpolator.getInterpolation(ev.getProgress());
+					float scale=1f-progress*0.1f;
+					container.setScaleX(scale);
+					container.setScaleY(scale);
+				}
+			});
+		}
 	}
 
 	public void showWithoutAnimation(){
