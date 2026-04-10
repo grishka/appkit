@@ -492,9 +492,11 @@ public class FragmentStackActivity extends Activity{
 			anim.addListener(new AnimatorListenerAdapter(){
 				@Override
 				public void onAnimationEnd(Animator animation){
-					predictiveAnimPrevFragmentView.setOutlineProvider(null);
-					predictiveAnimPrevFragmentView.setClipToOutline(false);
-					predictiveAnimPrevFragmentView=null;
+					if(predictiveAnimPrevFragmentView!=null){
+						predictiveAnimPrevFragmentView.setOutlineProvider(null);
+						predictiveAnimPrevFragmentView.setClipToOutline(false);
+						predictiveAnimPrevFragmentView=null;
+					}
 					content.setBackground(null);
 				}
 			});
@@ -718,14 +720,14 @@ public class FragmentStackActivity extends Activity{
 
 		@Override
 		public void onBackProgressed(@NonNull BackEvent backEvent){
-			if(predictiveAnimCurrentFragmentView==null)
+			if(predictiveAnimCurrentFragmentView==null || predictiveAnimPrevFragmentView==null)
 				return;
 			update(backEvent);
 		}
 
 		@Override
 		public void onBackCancelled(){
-			if(predictiveAnimCurrentFragmentView==null)
+			if(predictiveAnimCurrentFragmentView==null || predictiveAnimPrevFragmentView==null)
 				return;
 			resetView(predictiveAnimCurrentFragmentView);
 			predictiveAnimCurrentFragmentView=null;
