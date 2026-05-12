@@ -15,6 +15,7 @@ import android.util.DisplayMetrics;
 import android.util.Property;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -52,6 +53,7 @@ public class BottomSheet extends Dialog{
 		}
 	};
 	protected float dimAmount=0.5f;
+	private boolean cancelable=true;
 
 	public BottomSheet(@NonNull Context context){
 		super(context);
@@ -79,6 +81,11 @@ public class BottomSheet extends Dialog{
 		container.setClipToPadding(false);
 		content=view;
 		super.setContentView(container);
+	}
+
+	@Override
+	public void setContentView(int layoutResID){
+		setContentView(LayoutInflater.from(getContext()).inflate(layoutResID, null));
 	}
 
 	@Override
@@ -139,7 +146,8 @@ public class BottomSheet extends Dialog{
 
 				@Override
 				public void onBackInvoked(){
-					dismiss();
+					if(cancelable)
+						onBackPressed();
 				}
 
 				@Override
@@ -161,10 +169,12 @@ public class BottomSheet extends Dialog{
 				}
 
 				private void update(@NonNull BackEvent ev){
-					float progress=progressInterpolator.getInterpolation(ev.getProgress());
-					float scale=1f-progress*0.1f;
-					container.setScaleX(scale);
-					container.setScaleY(scale);
+					if(cancelable){
+						float progress=progressInterpolator.getInterpolation(ev.getProgress());
+						float scale=1f-progress*0.1f;
+						container.setScaleX(scale);
+						container.setScaleY(scale);
+					}
 				}
 			});
 		}
@@ -195,6 +205,16 @@ public class BottomSheet extends Dialog{
 			lp.width=ViewGroup.LayoutParams.MATCH_PARENT;
 		}
 		container.requestLayout();
+	}
+
+	@Override
+	public void setCancelable(boolean flag){
+		super.setCancelable(flag);
+		cancelable=flag;
+	}
+
+	protected boolean canDismissWithGesture(){
+		return cancelable;
 	}
 
 	protected void onWindowInsetsUpdated(WindowInsets insets){}
@@ -289,7 +309,7 @@ public class BottomSheet extends Dialog{
 
 		private void maybeDismiss(float velX, float velY){
 			boolean backAnimation = currentTranslationY < getPixelsInCM(0.8f, false) && (velY < 3500 || Math.abs(velY) < Math.abs(velX)) || velY < 0 && Math.abs(velY) >= 3500;
-			if (!backAnimation) {
+			if (!backAnimation && canDismissWithGesture()) {
 				dismiss();
 			} else {
 				final AnimatorSet currentAnimation = new AnimatorSet();
@@ -320,7 +340,7 @@ public class BottomSheet extends Dialog{
 		public boolean onTouchEvent(MotionEvent event){
 			if(event.getAction()==MotionEvent.ACTION_DOWN){
 				content.getHitRect(tmpRect);
-				if(!tmpRect.contains((int)event.getX(), (int)event.getY())){
+				if(!tmpRect.contains((int)event.getX(), (int)event.getY()) && canDismissWithGesture()){
 					dismiss();
 				}
 				return true;
