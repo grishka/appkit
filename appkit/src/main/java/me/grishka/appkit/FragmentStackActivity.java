@@ -686,6 +686,10 @@ public class FragmentStackActivity extends Activity{
 
 		@Override
 		public void onBackStarted(@NonNull BackEvent backEvent){
+			if(fragmentContainers.size()<2){
+				// I have no idea how this happens. It's not supposed to happen, but it does, and causes a crash for a small number of users.
+				return;
+			}
 			predictiveAnimCurrentFragmentView=fragmentContainers.get(fragmentContainers.size()-1);
 			Fragment fragment=getFragmentManager().findFragmentById(predictiveAnimCurrentFragmentView.getId());
 			if(fragment instanceof CustomTransitionsFragment ctf && !ctf.wantsPredictiveBackExitTransition()){
